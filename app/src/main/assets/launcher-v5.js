@@ -161,6 +161,8 @@ const Mek={
     const index=this.model.pages.findIndex(p=>p.id===id);
     if(index<0)return;
     this.model.current=id;
+    // Populate the target page before the slide and drop distant DOM tiles.
+    this.hydrateHomePages?.();
     const track=$('homeTrack');
     if(track)track.style.transform='translate3d(-'+(index*100)+'%,0,0)';
     this.renderPageDots();
