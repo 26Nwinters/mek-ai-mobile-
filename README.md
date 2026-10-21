@@ -1,3 +1,25 @@
+# MEK-AI Mobile v0.6.2 — Third-party widget visibility repair
+
+**Experimental Android beta.** Addresses the Galaxy S10+ regression reported after v0.6.1: third-party widgets could be added and resized in Home edit mode but left behind an invisible space after tapping Done.
+
+## Fix
+
+- **Atomic native widget updates:** The same JSON layout packet now carries both `allow` (whether native widgets should be visible) and the widget rects, with a strictly increasing revision number. The Android host rejects stale operations. A delayed "hide" from opening a sheet/edit mode can no longer override a newer Home "show" update.
+- **Visibility retries:** The Home screen resends an authoritative widget layout shortly after exiting edit mode, then again as Android/WebView sizing settles. Returning to MEK-AI from another Android activity triggers another sync.
+- **Provider failure feedback:** If a third-party provider is missing, cannot create its native view, or never acknowledges attachment after several seconds, the previously blank area now shows a widget unavailable notice with a tap-to-retry action.
+- **Folder/menu safety preserved:** Native Android host views still disappear behind folders, customization sheets, or the editing toolbar; they return when the Home screen is ready. Transparent/outline/minimal/panel styles remain supported.
+- **Layout and widget bindings retained:** v0.6.2 does not reset your Home pages or intentionally allocate replacement Android widget IDs.
+
+## Verification
+
+GitHub Actions runs all Node/jsdom launcher tests and source integration checks, verifies bundled artwork and synchronized version metadata, then compiles Android SDK 36 debug APK. New regression tests cover the add → edit → Done → visible widget cycle, modal layering, resume, ordered revisions, and recovery notice.
+
+**On-device testing is still necessary.** Actual AppWidgetHostView rendering is part of Android and cannot be validated in browser simulations or GitHub Actions. The system provider can still supply its own opaque background, which the launcher cannot override.
+
+**Signing warning:** Without the owner-configured `MEK_DEBUG_KEYSTORE_B64` GitHub secret, this APK uses a fresh temporary debug key and is **not installable in-place over a differently signed previous version**. Export your current layout before uninstalling an older build, and retain Samsung One UI Home as the fallback.
+
+---
+
 # MEK-AI Mobile v0.6.1 — Native widget overlay, transparency and resizing fix
 
 **Release class: Experimental Android beta.** This patch responds to screenshots from the Galaxy S10+ and retains existing layout data from v0.6.0.

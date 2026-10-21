@@ -12,7 +12,7 @@ async function phone(seed=null){
   w.scrollTo=()=>{};
   w.HTMLElement.prototype.scrollTo=function(arg){this.scrollLeft=typeof arg==='object'?arg.left||0:0;};
   w.HTMLCanvasElement.prototype.getContext=()=>({beginPath(){},arc(){},fill(){},clearRect(){}});
-  const calls={launch:[],system:[],widgets:[],widgetInventories:[],widgetLayers:[],exports:[],imports:0,pickWidget:0,info:[],iconBatches:[]};
+  const calls={launch:[],system:[],widgets:[],widgetInventories:[],widgetLayers:[],widgetTimeline:[],exports:[],imports:0,pickWidget:0,info:[],iconBatches:[]};
   const apps=Array.from({length:150},(_,i)=>({name:'Application '+String(i).padStart(3,'0'),pkg:'com.example.app'+i}));
   w.MEK={
     battery:()=>JSON.stringify({percent:37,charging:false}),
@@ -36,9 +36,17 @@ async function phone(seed=null){
     requestWidgetCatalog:()=>w.setTimeout(()=>w.mekNativeWidgetCatalog(JSON.stringify([{provider:'com.example.clock/.Widget',package:'com.example.clock',name:'Clock',minWidth:160,minHeight:90,minResizeWidth:100,minResizeHeight:80,maxResizeWidth:380,maxResizeHeight:400,resizeMode:3}])),0),
     requestWidgetPreview:provider=>w.setTimeout(()=>w.mekNativeWidgetPreview(provider,'data:image/webp;base64,AAAA'),0),
     selectWidgetProvider:provider=>{calls.selectedProvider=provider;},
-    syncWidgetRects:data=>calls.widgets.push(JSON.parse(data)),
+    syncWidgetRects:data=>{
+      const value=JSON.parse(data);
+      calls.widgets.push(value);
+      calls.widgetTimeline.push({kind:'layout',revision:value.revision,allow:value.allow,
+        ids:(value.widgets||[]).map(w=>w.id)});
+    },
     syncWidgetInventory:data=>calls.widgetInventories.push(JSON.parse(data)),
-    setWidgetLayerActive:allowed=>calls.widgetLayers.push(allowed)
+    setWidgetLayerActive:(allowed,revision)=>{
+      calls.widgetLayers.push(allowed);
+      calls.widgetTimeline.push({kind:'gate',revision,allow:allowed,ids:[]});
+    }
   };
   for(const name of ['launcher-core.js','launcher-v5.js','launcher-v5-ui.js',
     'launcher-v5-sheets.js','launcher-v5-organizer.js','launcher-v6-widgets.js','launcher-v6-companion.js','launcher-v6-folders.js','launcher-v5-gestures.js'])w.eval(read(name));
@@ -713,5 +721,86 @@ test('widget size sheet offers 1-cell wide and tall dimensions without forced as
   assert.ok(sizes.some(x=>x.includes('1 × 3')));
   assert.ok(sizes.some(x=>x.includes('3 × 1')));
   assert.ok(sizes.some(x=>x.includes('4 × 4')));
+  dom.window.close();
+});
+
+test('leaving edit mode delivers an atomic nonempty SHOW payload with a newer revision',async()=>{
+  const {dom,M,calls}=await phone();await settle();
+  M.nativeWidgetChosen(811,'Provider clock',165,120);
+  M.exitEdit();
+  await new Promise(resolve=>setTimeout(resolve,160));
+  const layouts=calls.widgets.filter(x=>x.widgets.some(y=>y.id===811));
+  assert.ok(layouts.length,'exitEdit must send a real widget rect, not an empty hide packet');
+  assert.equal(layouts.at(-1).allow,true);
+  assert.equal(layouts.at(-1).widgets[0].visible,true);
+  assert.ok(layouts.at(-1).revision>0);
+  assert.ok(calls.widgetTimeline.some(x=>x.kind==='gate'&&x.allow===false));
+  const actions=calls.widgetTimeline.slice();
+  assert.ok(actions.every(x=>Number.isInteger(x.revision)&&x.revision>0));
+  for(let i=1;i<actions.length;i++){
+    assert.ok(actions[i].revision>actions[i-1].revision,
+      'widget gate and position updates must have globally increasing revisions');
+  }
+  let effective={revision:-1,allow:false,ids:[]};
+  // Simulate Android's runOnUiThread calls being serviced out of order.
+  for(const action of actions.slice().reverse()){
+    if(action.revision>effective.revision)effective=action;
+  }
+  assert.equal(effective.kind,'layout');
+  assert.equal(effective.allow,true);
+  assert.ok(effective.ids.includes(811));
+  dom.window.close();
+});
+
+test('folder transitions send atomically blocked layouts then restore widget views',async()=>{
+  const {dom,M,calls}=await phone();await settle();
+  M.nativeWidgetChosen(812,'Clock',160,110);
+  M.exitEdit();await new Promise(resolve=>setTimeout(resolve,100));
+  const folder=M.Core.addHome(M.model,{id:'layer-folder',type:'folder',
+    name:'Apps',apps:[{pkg:'com.example.app5',label:'Application 005'}]});
+  assert.ok(folder);
+  M.renderHome();
+  M.openFolder('layer-folder');
+  await new Promise(resolve=>setTimeout(resolve,110));
+  const blocked=calls.widgets.at(-1);
+  assert.equal(blocked.allow,false);
+  assert.equal(blocked.widgets.length,0);
+  M.closeFolder();
+  await new Promise(resolve=>setTimeout(resolve,100));
+  const restored=calls.widgets.at(-1);
+  assert.equal(restored.allow,true);
+  assert.ok(restored.widgets.some(w=>w.id===812));
+  assert.ok(restored.revision>blocked.revision);
+  dom.window.close();
+});
+
+test('native host failures are visible and recover when the provider attaches',async()=>{
+  const {dom,M,d,calls}=await phone();await settle();
+  M.nativeWidgetChosen(813,'Third party weather',165,110);
+  M.exitEdit();await settle();
+  M.nativeWidgetHostStatus(813,'missing');
+  let cell=d.querySelector('.grid-cell[data-type="android-widget"] .native-widget-placeholder');
+  assert.ok(cell?.classList.contains('native-widget-error'));
+  assert.equal(cell.dataset.hostStatus,'error');
+  cell.click();
+  await new Promise(resolve=>setTimeout(resolve,90));
+  assert.ok(calls.widgets.some(packet=>packet.allow&&packet.widgets.some(w=>w.id===813)));
+  M.nativeWidgetHostStatus(813,'attached');
+  cell=d.querySelector('.grid-cell[data-type="android-widget"] .native-widget-placeholder');
+  assert.equal(cell.dataset.hostStatus,'attached');
+  assert.equal(cell.classList.contains('native-widget-error'),false);
+  dom.window.close();
+});
+
+test('Android resume explicitly reapplies visible widget positions',async()=>{
+  const {dom,M,calls}=await phone();await settle();
+  M.nativeWidgetChosen(814,'Weather',150,110);
+  M.exitEdit();await new Promise(resolve=>setTimeout(resolve,120));
+  const first=calls.widgets.filter(x=>x.allow&&x.widgets.some(y=>y.id===814)).at(-1);
+  assert.ok(first);
+  M.refreshNative();
+  await new Promise(resolve=>setTimeout(resolve,125));
+  const next=calls.widgets.filter(x=>x.allow&&x.widgets.some(y=>y.id===814)).at(-1);
+  assert.ok(next.revision>first.revision);
   dom.window.close();
 });

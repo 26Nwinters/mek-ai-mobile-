@@ -491,3 +491,31 @@ body.editing .grid-cell.selected[data-type="stack"] .cell-resize-height {
   width:32px;height:32px;font-size:20px
  }
 }
+
+/* v0.6.2: Never leave an empty, invisible cell when a third-party widget
+   provider is unavailable or the Android host does not acknowledge a SHOW.
+   This warning is transparent and inert unless the native host reports an
+   error. Native RemoteViews remain layered above it when successfully shown. */
+body:not(.editing) .grid-cell[data-type="android-widget"] .native-widget-placeholder.native-widget-error {
+  display:flex!important;
+  visibility:visible!important;
+  opacity:1!important;
+  pointer-events:auto!important;
+  background:rgba(31,43,31,.92)!important;
+  border:1px dashed #e3ac69!important;
+  box-shadow:0 4px 16px #0009!important;
+  padding:9px!important;
+  cursor:pointer;
+}
+body:not(.editing) .grid-cell[data-type="android-widget"] .native-widget-placeholder.native-widget-error > * {
+  opacity:1!important;
+  visibility:visible!important;
+}
+.grid-cell[data-type="android-widget"] .native-widget-placeholder.native-widget-error .widget-title-text {
+  font:600 clamp(12px,3.4vw,17px)/1.2 Arial,sans-serif;
+}
+.grid-cell[data-type="android-widget"] .native-widget-placeholder.native-widget-error .widget-foot {
+  font:9px/1.4 monospace;
+  color:#f0c78d;
+  padding:4px 0;
+}

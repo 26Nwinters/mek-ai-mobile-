@@ -318,49 +318,112 @@ const Mek={
         return !overlay||overlay.classList.contains('hidden');
       });
   },
+  nextNativeWidgetRevision(){
+    // A revision ties together Android's visibility gate and geometry
+    // updates. Asynchronous runOnUiThread callbacks can otherwise allow an
+    // old "hide" operation to arrive AFTER the new "show" geometry packet.
+    this.nativeWidgetRevision=(this.nativeWidgetRevision||0)+1;
+    return this.nativeWidgetRevision;
+  },
   updateNativeWidgetLayer(allowed=this.canShowNativeWidgets()){
     if(this.lastNativeLayerAllowed===allowed)return;
     this.lastNativeLayerAllowed=allowed;
-    // Re-enable requires a new authoritative position packet, even if the
-    // active Home page matches an earlier cached payload.
+    if(!allowed)this.nativeWidgetStatuses?.clear();
+    // Explicitly invalidate cached placement on every modal/edit transition:
+    // Home must always send a fresh SHOW + geometry packet on restoration.
     this.lastWidgetPayload=null;
     const native=this.native();
     if(native&&typeof native.setWidgetLayerActive==='function'){
-      try{native.setWidgetLayerActive(allowed);}catch(e){}
+      try{native.setWidgetLayerActive(allowed,this.nextNativeWidgetRevision());}
+      catch(e){this.lastNativeLayerAllowed=null;}
     }
   },
   scheduleWidgetSync(){
-    // Disable native surfaces before the next frame when the user opens
-    // a folder, editing toolbar or modal. Native host views sit ABOVE the
-    // WebView and otherwise intercept all touches in their bounds.
-    this.updateNativeWidgetLayer();
+    // Native AppWidgetHostViews live above the WebView, so a folder or sheet
+    // must first hide them. Restoring Home sends a complete atomic snapshot.
+    const show=this.canShowNativeWidgets();
+    this.updateNativeWidgetLayer(show);
     clearTimeout(this.nativeWidgetTimer);
-    this.nativeWidgetTimer=setTimeout(()=>this.syncNativeWidgets(),30);
-    if(this.view==='home'&&this.canShowNativeWidgets()){
-      clearTimeout(this.nativeWidgetFollowup);
-      this.nativeWidgetFollowup=setTimeout(()=>this.syncNativeWidgets(),230);
+    clearTimeout(this.nativeWidgetFollowup);
+    clearTimeout(this.nativeWidgetRecoveryTimer);
+    clearTimeout(this.nativeWidgetStatusTimer);
+    this.nativeWidgetTimer=setTimeout(()=>this.syncNativeWidgets(true),40);
+    if(show){
+      this.nativeWidgetStatusTimer=setTimeout(()=>{
+        if(!this.canShowNativeWidgets())return;
+        const active=Core.pageById(this.model,this.model.current);
+        for(const item of (active?.items||[])){
+          if(item.type!=='android-widget')continue;
+          if(this.nativeWidgetStatuses?.get(item.nativeId)!=='attached')
+            this.nativeWidgetHostStatus(item.nativeId,'error');
+        }
+      },3400);
+      // WebView layout or Android provider updates may settle a few frames
+      // later. Retrying is deliberate, even if rects look unchanged.
+      this.nativeWidgetFollowup=setTimeout(()=>this.syncNativeWidgets(true),320);
+      this.nativeWidgetRecoveryTimer=setTimeout(()=>this.syncNativeWidgets(true),1400);
     }
   },
-  syncNativeWidgets(){
-    const native=this.native();if(!native||typeof native.syncWidgetRects!=='function')return;
-    const visible=this.canShowNativeWidgets();
-    this.updateNativeWidgetLayer(visible);
+  syncNativeWidgets(force=false){
+    const native=this.native();
+    if(!native||typeof native.syncWidgetRects!=='function')return;
+    const allow=this.canShowNativeWidgets();
+    this.updateNativeWidgetLayer(allow);
     const widgets=[];
-    if(visible){
+    if(allow){
       const page=Core.pageById(this.model,this.model.current);
+      const cells=Array.from(document.querySelectorAll('.home-page'))
+        .filter(n=>n.dataset.page===page?.id)
+        .flatMap(n=>Array.from(n.querySelectorAll('.grid-cell')));
       for(const item of (page?.items||[])){
         if(item.type!=='android-widget')continue;
-        const n=Array.from(document.querySelectorAll('.grid-cell')).find(x=>x.dataset.uid===item.id);
-        if(!n)continue;
-        const rect=n.getBoundingClientRect();
-        if(!rect.width||!rect.height)continue;
-        widgets.push({id:item.nativeId,x:rect.left,y:rect.top,w:rect.width,h:rect.height,visible:true});
+        const node=cells.find(n=>n.dataset.uid===item.id);
+        if(!node)continue;
+        const rect=node.getBoundingClientRect();
+        if(!Number.isFinite(rect.width)||!Number.isFinite(rect.height)||
+           rect.width<1||rect.height<1)continue;
+        widgets.push({id:item.nativeId,x:rect.left,y:rect.top,
+          w:rect.width,h:rect.height,visible:true});
       }
     }
-    const payload=JSON.stringify({viewportWidth:window.innerWidth,widgets});
-    if(payload===this.lastWidgetPayload)return;
-    this.lastWidgetPayload=payload;
-    try{native.syncWidgetRects(payload);}catch(e){}
+    const snapshot={viewportWidth:window.innerWidth,allow,widgets};
+    const signature=JSON.stringify(snapshot);
+    if(!force&&signature===this.lastWidgetPayload)return;
+    this.lastWidgetPayload=signature;
+    // The payload owns visibility as well as positioning. Android processes
+    // both atomically and rejects older revisions, eliminating the split-
+    // bridge invisible-widget race observed after leaving Home edit mode.
+    snapshot.revision=this.nextNativeWidgetRevision();
+    try{native.syncWidgetRects(JSON.stringify(snapshot));}
+    catch(e){this.lastWidgetPayload=null;}
+  },
+  nativeWidgetHostStatus(id,status){
+    id=Number(id);
+    if(!Number.isInteger(id)||id<1)return;
+    if(!this.nativeWidgetStatuses)this.nativeWidgetStatuses=new Map();
+    if(status==='attached')this.nativeWidgetStatuses.set(id,'attached');
+    else if(status==='missing'||status==='error')
+      this.nativeWidgetStatuses.set(id,'error');
+    const state=this.nativeWidgetStatuses.get(id);
+    for(const node of document.querySelectorAll('.grid-cell[data-type="android-widget"]')){
+      const item=Core.locate(this.model,node.dataset.uid)?.item;
+      if(item?.nativeId!==id)continue;
+      const panel=node.querySelector('.native-widget-placeholder');
+      if(!panel)continue;
+      panel.classList.toggle('native-widget-error',state==='error');
+      panel.dataset.hostStatus=state||'pending';
+      if(state==='error'){
+        const title=panel.querySelector('.widget-title-text');
+        const hint=panel.querySelector('.widget-foot');
+        if(title)title.textContent='Widget unavailable';
+        if(hint)hint.textContent='TAP TO RETRY ANDROID WIDGET';
+        panel.onclick=e=>{
+          e.stopPropagation();
+          this.lastWidgetPayload=null;
+          this.syncNativeWidgets(true);
+        };
+      }else panel.onclick=null;
+    }
   },
   chooseNativeWidget(){
     const native=this.native();
@@ -414,6 +477,9 @@ const Mek={
   refreshNative(){
     this.refreshClock();this.refreshBattery();this.showHomeSetup();
     this.scheduleWidgetInventorySync();
+    // Returning from provider configuration or another Android Activity
+    // must reattach and remeasure any active AppWidgetHostViews.
+    this.scheduleWidgetSync();
     if(Date.now()-this.lastAppsRequest>300000)this.refreshApps(true);
   },
   // App icon tiles are created before they're inserted into the DOM.
@@ -630,6 +696,7 @@ window.goBackInLauncher=()=>Mek.goBack();
 window.mekBackupImported=json=>Mek.backupImported(json);
 window.mekBackupResult=message=>Mek.backupResult(message);
 window.mekNativeWidgetChosen=(...args)=>Mek.nativeWidgetChosen(...args);
+window.mekNativeWidgetStatus=(id,status)=>Mek.nativeWidgetHostStatus(id,status);
 window.mekNativeWidgetError=()=>Mek.nativeWidgetError();
 window.mekAppsChanged=()=>Mek.appsChanged();
 window.mekNativeHome=()=>Mek.nativeHome();

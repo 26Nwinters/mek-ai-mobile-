@@ -62,15 +62,24 @@ test('native host sends modern Android 12+ widget size option updates',()=>{
   assert.match(java,/selectWidgetProvider/);
 });
 
-test('v0.6.1 hides Android host views above WebView dialogs and edit mode',()=>{
-  assert.match(java,/void setNativeWidgetLayerActive\(boolean allowed\)/);
-  assert.match(java,/if \(!nativeWidgetsUiAllowed\)/);
-  assert.match(java,/setWidgetLayerActive\(boolean allowed\)/);
+test('v0.6.2 always restores Android widgets after edit, with versioned atomic layer updates',()=>{
+  assert.match(java,/boolean setNativeWidgetLayerActive\(boolean allowed,int revision\)/);
+  assert.match(java,/revision<=latestWidgetLayerRevision/);
+  assert.match(java,/boolean allowed=input\.optBoolean\("allow",false\)/);
+  assert.match(java,/setNativeWidgetLayerActive\(allowed,revision\)/);
+  assert.match(java,/setWidgetLayerActive\(boolean allowed,int revision\)/);
   assert.match(java,/view\.setVisibility\(View\.GONE\)/);
+  assert.match(java,/hostView\.setVisibility\(View\.VISIBLE\)/);
   assert.match(java,/hostView\.setBackgroundColor\(android\.graphics\.Color\.TRANSPARENT\)/);
+  assert.match(java,/reportWidgetStatus\(id,"attached"\)/);
+  assert.match(java,/reportWidgetStatus\(id,"missing"\)/);
   const js=read('app/src/main/assets/launcher-v5.js');
   assert.match(js,/canShowNativeWidgets\(\)/);
-  assert.match(js,/setWidgetLayerActive\(allowed\)/);
+  assert.match(js,/nextNativeWidgetRevision\(\)/);
+  assert.match(js,/setWidgetLayerActive\(allowed,this\.nextNativeWidgetRevision\(\)\)/);
+  assert.match(js,/snapshot\.revision=this\.nextNativeWidgetRevision\(\)/);
+  assert.match(js,/this\.scheduleWidgetSync\(\);[\s\S]*if\(Date\.now\(\)-this\.lastAppsRequest/);
+  assert.match(js,/window\.mekNativeWidgetStatus=/);
   const ui=read('app/src/main/assets/launcher-v5-ui.js');
   assert.match(ui,/this\.updateNativeWidgetLayer\(false\)/);
 });

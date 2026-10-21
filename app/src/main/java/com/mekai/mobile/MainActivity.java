@@ -71,14 +71,33 @@ public class MainActivity extends Activity {
     // children. CSS z-index cannot place a folder over them. Block and hide
     // these native surfaces whenever an HTML dialog or edit mode is active.
     private boolean nativeWidgetsUiAllowed = true;
-    private void setNativeWidgetLayerActive(boolean allowed) {
+    private int latestWidgetLayerRevision = -1;
+    private final HashMap<Integer,String> reportedWidgetStatuses = new HashMap<>();
+
+    /* Called on Android's main thread. Stale queued WebView callbacks are
+       ignored so an older HIDE cannot override a later SHOW + placement. */
+    private boolean setNativeWidgetLayerActive(boolean allowed,int revision) {
+        if(revision<=latestWidgetLayerRevision)return false;
+        latestWidgetLayerRevision=revision;
         nativeWidgetsUiAllowed=allowed;
-        if (!allowed) for (AppWidgetHostView view : widgetViews.values()) {
-            view.setVisibility(View.GONE);
-            view.setClickable(false);
+        if(!allowed){
+            for(AppWidgetHostView view:widgetViews.values()){
+                view.setVisibility(View.GONE);
+                view.setClickable(false);
+            }
+            // Force a new ATTACHED notification when Home becomes visible
+            // again. Otherwise the JS UI can retain a stale "shown" status
+            // even when a provider failed to reattach.
+            reportedWidgetStatuses.clear();
         }
-        // On reopening, wait for an authoritative layout rect sync instead
-        // of reviving stale widgets or letting them steal dialog touches.
+        return true;
+    }
+
+    private void reportWidgetStatus(int id,String status){
+        if(status.equals(reportedWidgetStatuses.get(id)))return;
+        reportedWidgetStatuses.put(id,status);
+        callback("window.mekNativeWidgetStatus && window.mekNativeWidgetStatus("+
+            id+","+JSONObject.quote(status)+")");
     }
 
     private final HashMap<Integer,String> lastWidgetSizes=new HashMap<>();
@@ -188,7 +207,7 @@ public class MainActivity extends Activity {
         for (AppWidgetHostView view : widgetViews.values()) {
             if (stage != null) stage.removeView(view);
         }
-        widgetViews.clear();lastWidgetSizes.clear();
+        widgetViews.clear();lastWidgetSizes.clear();reportedWidgetStatuses.clear();
         appExecutor.shutdownNow();
         if (web != null) {
             web.removeJavascriptInterface("MEK");
@@ -283,6 +302,7 @@ public class MainActivity extends Activity {
         Runnable task=widgetCleanupTasks.remove(id);
         if(task!=null)widgetCleanupHandler.removeCallbacks(task);
         lastWidgetSizes.remove(id);
+        reportedWidgetStatuses.remove(id);
         AppWidgetHostView view=widgetViews.remove(id);
         if(view!=null && stage!=null)stage.removeView(view);
         widgetLayoutIds.remove(id);
@@ -561,15 +581,16 @@ public class MainActivity extends Activity {
             if(!Double.isFinite(viewport)||viewport<100)return;
             double scale=web.getWidth()/viewport;
             if(!Double.isFinite(scale)||scale<=0)return;
+            int revision=input.optInt("revision",-1);
+            if(revision<0||revision<=latestWidgetLayerRevision)return;
+            // Visibility and placement are owned by the SAME versioned
+            // snapshot. An earlier asynchronous "hide" cannot leave the
+            // AppWidgetHostView permanently invisible after exitEdit().
+            boolean allowed=input.optBoolean("allow",false);
+            setNativeWidgetLayerActive(allowed,revision);
             JSONArray items=input.optJSONArray("widgets");
             HashSet<Integer> visible=new HashSet<>();
-            if (!nativeWidgetsUiAllowed) {
-                for (AppWidgetHostView view : widgetViews.values()) {
-                    view.setVisibility(View.GONE);
-                    view.setClickable(false);
-                }
-                return;
-            }
+            if(!allowed)return;
             if(items!=null){
                 for(int i=0;i<Math.min(40,items.length());i++){
                     JSONObject item=items.optJSONObject(i);
@@ -583,7 +604,11 @@ public class MainActivity extends Activity {
                     AppWidgetHostView hostView=widgetViews.get(id);
                     if(hostView==null){
                         AppWidgetProviderInfo info=AppWidgetManager.getInstance(this).getAppWidgetInfo(id);
-                        if(info==null)continue;
+                        if(info==null){
+                            reportWidgetStatus(id,"missing");
+                            Log.w(TAG,"Widget provider missing for host id "+id);
+                            continue;
+                        }
                         try{
                             hostView=widgetHost.createView(this,id,info);
                             // The launcher does not impose a card background.
@@ -593,7 +618,8 @@ public class MainActivity extends Activity {
                             widgetViews.put(id,hostView);
                             stage.addView(hostView);
                         }catch(Exception e){
-                            Log.w(TAG,"Could not create native widget view",e);continue;
+                            Log.w(TAG,"Could not create native widget view "+id,e);
+                            reportWidgetStatus(id,"error");continue;
                         }
                     }
                     visible.add(id);
@@ -605,6 +631,7 @@ public class MainActivity extends Activity {
                     hostView.setLayoutParams(params);
                     hostView.setVisibility(View.VISIBLE);
                     hostView.setClickable(true);
+                    reportWidgetStatus(id,"attached");
                     float density=getResources().getDisplayMetrics().density;
                     float widthDp=(float)(w*scale/density);
                     float heightDp=(float)(h*scale/density);
@@ -712,8 +739,9 @@ public class MainActivity extends Activity {
             runOnUiThread(()->reconcileWidgetInventory(json));
         }
 
-        @JavascriptInterface public void setWidgetLayerActive(boolean allowed) {
-            runOnUiThread(() -> setNativeWidgetLayerActive(allowed));
+        @JavascriptInterface public void setWidgetLayerActive(boolean allowed,int revision) {
+            if(revision<0)return;
+            runOnUiThread(() -> setNativeWidgetLayerActive(allowed,revision));
         }
 
         @JavascriptInterface public void syncWidgetRects(String json) {
