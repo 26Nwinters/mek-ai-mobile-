@@ -1,6 +1,18 @@
 package com.mekai.mobile;
 
 import android.app.Activity;
+import android.content.ComponentName;
+import android.os.UserHandle;
+import android.graphics.Insets;
+import android.view.WindowInsets;
+import android.window.OnBackInvokedDispatcher;
+import android.window.OnBackInvokedCallback;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.webkit.WebResourceResponse;
+import java.io.ByteArrayInputStream;
+import java.util.Map;
 import android.appwidget.AppWidgetHost;
 import android.appwidget.AppWidgetHostView;
 import android.appwidget.AppWidgetManager;
@@ -57,7 +69,13 @@ public class MainActivity extends Activity {
     private static final int REQUEST_IMPORT=931;
     private static final int REQUEST_PICK_WIDGET=932;
     private static final int REQUEST_CONFIG_WIDGET=933;
+    private static final int REQUEST_BIND_WIDGET=934;
     private int pendingWidgetId=-1;
+    private final Handler widgetCleanupHandler = new Handler(Looper.getMainLooper());
+    private final HashMap<Integer,Runnable> widgetCleanupTasks = new HashMap<>();
+    private final HashSet<Integer> widgetLayoutIds = new HashSet<>();
+    private static final long WIDGET_UNDO_GRACE_MS = 20_000L;
+    private boolean widgetInventoryReceived=false;
     private String pendingExport;
     private BroadcastReceiver packageReceiver;
     private boolean receiverRegistered=false;
@@ -79,28 +97,67 @@ public class MainActivity extends Activity {
         WebSettings settings = web.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
-        settings.setAllowFileAccess(true);
+        settings.setAllowFileAccess(false);
+        settings.setAllowContentAccess(false);
         settings.setAllowFileAccessFromFileURLs(false);
         settings.setAllowUniversalAccessFromFileURLs(false);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         web.addJavascriptInterface(new PhoneBridge(), "MEK");
         web.setWebChromeClient(new WebChromeClient());
+        // Keep the existing localStorage origin during this security update.
+        // Disabling file access does NOT block packaged android_asset content,
+        // and no remote page may access the JavaScript bridge.
         web.setWebViewClient(new WebViewClient() {
+            @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
+                String url=req.getUrl().toString();
+                if (url.startsWith("file:///android_asset/")) return null;
+                return new WebResourceResponse("text/plain","UTF-8",
+                    new ByteArrayInputStream(new byte[0]));
+            }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
-                if (HOME.equals(req.getUrl().toString())) return false;
-                return true;
+                return !HOME.equals(req.getUrl().toString());
             }
         });
         stage = new FrameLayout(this);
         stage.addView(web, new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT));
         setContentView(stage);
+        if (Build.VERSION.SDK_INT >= 35) {
+            // Target API 36 mandates edge-to-edge on modern Android.
+            getWindow().setDecorFitsSystemWindows(false);
+            stage.setOnApplyWindowInsetsListener((view,insets)->{
+                Insets safe=insets.getInsets(
+                    WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());
+                stage.setPadding(safe.left,safe.top,safe.right,safe.bottom);
+                return insets;
+            });
+        }
+        if (Build.VERSION.SDK_INT >= 33) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                ()->{
+                    if(web!=null)web.evaluateJavascript(
+                        "window.goBackInLauncher && window.goBackInLauncher()",null);
+                }
+            );
+        }
         widgetHost = new AppWidgetHost(this, 4721);
+        pendingWidgetId=state==null?-1:state.getInt("mekPendingWidgetId",-1);
+        int staleId=getPreferences(MODE_PRIVATE).getInt("pendingWidgetId",-1);
+        if(staleId>0 && staleId!=pendingWidgetId){
+            releaseWidgetId(staleId);
+            getPreferences(MODE_PRIVATE).edit().remove("pendingWidgetId").apply();
+        }
         try { widgetHost.startListening(); }
         catch (Exception e) { Log.w(TAG,"Widget host start failed",e); }
         registerAppChanges();
         web.loadUrl(HOME);
+    }
+
+    @Override protected void onSaveInstanceState(Bundle outState) {
+        outState.putInt("mekPendingWidgetId",pendingWidgetId);
+        super.onSaveInstanceState(outState);
     }
 
     @Override protected void onDestroy() {
@@ -108,6 +165,11 @@ public class MainActivity extends Activity {
             try { unregisterReceiver(packageReceiver); } catch(Exception ignored){}
         }
         if (widgetHost != null) try { widgetHost.stopListening(); } catch(Exception ignored){}
+        for (Runnable task : widgetCleanupTasks.values()) widgetCleanupHandler.removeCallbacks(task);
+        widgetCleanupTasks.clear();
+        for (AppWidgetHostView view : widgetViews.values()) {
+            if (stage != null) stage.removeView(view);
+        }
         widgetViews.clear();
         appExecutor.shutdownNow();
         if (web != null) {
@@ -150,7 +212,12 @@ public class MainActivity extends Activity {
         filter.addAction(Intent.ACTION_PACKAGE_REMOVED);
         filter.addAction(Intent.ACTION_PACKAGE_CHANGED);
         filter.addDataScheme("package");
-        try { registerReceiver(packageReceiver, filter); receiverRegistered=true; }
+        try {
+            if (Build.VERSION.SDK_INT >= 33)
+                registerReceiver(packageReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            else registerReceiver(packageReceiver, filter);
+            receiverRegistered=true;
+        }
         catch(Exception e){Log.w(TAG,"Package change broadcast unavailable",e);}
     }
 
@@ -193,16 +260,118 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void releaseWidgetId(int id) {
+        if(id<=0 || widgetHost==null) return;
+        Runnable task=widgetCleanupTasks.remove(id);
+        if(task!=null)widgetCleanupHandler.removeCallbacks(task);
+        AppWidgetHostView view=widgetViews.remove(id);
+        if(view!=null && stage!=null)stage.removeView(view);
+        widgetLayoutIds.remove(id);
+        try {widgetHost.deleteAppWidgetId(id);}
+        catch(Exception e){Log.w(TAG,"Could not release widget id "+id,e);}
+    }
+
+    /* Inventory reflects ALL Home pages, not just currently visible widgets.
+       Missing IDs receive an undo grace period. The same cleanup happens
+       after an app restart if a widget was removed while the process died. */
+    private void reconcileWidgetInventory(String json) {
+        if(widgetHost==null || json==null || json.length()>12000)return;
+        final HashSet<Integer> retained=new HashSet<>();
+        try {
+            JSONArray arr=new JSONArray(json);
+            if(arr.length()>256)return;
+            for(int i=0;i<arr.length();i++){
+                int id=arr.optInt(i,-1);
+                if(id>0)retained.add(id);
+            }
+        }catch(Exception e){Log.w(TAG,"Invalid widget inventory",e);return;}
+        widgetInventoryReceived=true;
+        widgetLayoutIds.clear();
+        widgetLayoutIds.addAll(retained);
+        for(Integer id:retained){
+            Runnable task=widgetCleanupTasks.remove(id);
+            if(task!=null)widgetCleanupHandler.removeCallbacks(task);
+        }
+        HashSet<Integer> known=new HashSet<>(widgetViews.keySet());
+        for(int id:widgetHost.getAppWidgetIds())known.add(id);
+        for(Integer id:known){
+            if(id==pendingWidgetId || retained.contains(id) || widgetCleanupTasks.containsKey(id))
+                continue;
+            Runnable pending=new Runnable() {
+                @Override public void run() {
+                    widgetCleanupTasks.remove(id);
+                    if(widgetInventoryReceived && !widgetLayoutIds.contains(id) &&
+                       pendingWidgetId!=id)releaseWidgetId(id);
+                }
+            };
+            widgetCleanupTasks.put(id,pending);
+            widgetCleanupHandler.postDelayed(pending,WIDGET_UNDO_GRACE_MS);
+        }
+    }
+
+    private void cancelPendingWidget(){
+        int orphan=pendingWidgetId;
+        pendingWidgetId=-1;
+        getPreferences(MODE_PRIVATE).edit().remove("pendingWidgetId").apply();
+        if(orphan>0)releaseWidgetId(orphan);
+        notifyWidgetError();
+    }
+
+    private void configureOrFinishWidget(int widgetId){
+        AppWidgetProviderInfo info=AppWidgetManager.getInstance(this).getAppWidgetInfo(widgetId);
+        if(info==null){cancelPendingWidget();return;}
+        if(info.configure!=null){
+            try {
+                // Provider configuration is part of the AppWidgetHost contract.
+                widgetHost.startAppWidgetConfigureActivityForResult(
+                    this,widgetId,0,REQUEST_CONFIG_WIDGET,null);
+                return;
+            }catch(Exception e){
+                Log.w(TAG,"Widget configuration unavailable",e);
+                // Do not pretend the widget is functional without its setup.
+                cancelPendingWidget();return;
+            }
+        }
+        finishWidgetPicker(widgetId);
+    }
+
+    private void bindChosenWidget(int widgetId,Intent data){
+        try {
+            AppWidgetManager manager=AppWidgetManager.getInstance(this);
+            if(manager.getAppWidgetInfo(widgetId)!=null){
+                configureOrFinishWidget(widgetId);return;
+            }
+            ComponentName provider=data==null?null:
+                data.getParcelableExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER);
+            UserHandle profile=data==null?null:
+                data.getParcelableExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER_PROFILE);
+            if(provider==null)throw new IllegalStateException("Picker did not return a provider");
+            boolean allowed=profile!=null ?
+                manager.bindAppWidgetIdIfAllowed(widgetId,profile,provider,null) :
+                manager.bindAppWidgetIdIfAllowed(widgetId,provider);
+            if(allowed){configureOrFinishWidget(widgetId);return;}
+            Intent bind=new Intent(AppWidgetManager.ACTION_APPWIDGET_BIND);
+            bind.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,widgetId);
+            bind.putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER,provider);
+            if(profile!=null)bind.putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER_PROFILE,profile);
+            startActivityForResult(bind,REQUEST_BIND_WIDGET);
+        }catch(Exception e){
+            Log.w(TAG,"Widget bind permission unavailable",e);
+            cancelPendingWidget();
+        }
+    }
+
     private void startWidgetPicker() {
         if(widgetHost==null)return;
         try {
             pendingWidgetId=widgetHost.allocateAppWidgetId();
+            getPreferences(MODE_PRIVATE).edit().putInt("pendingWidgetId",pendingWidgetId).apply();
             Intent pick=new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);
             pick.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,pendingWidgetId);
             startActivityForResult(pick,REQUEST_PICK_WIDGET);
         } catch(Exception e) {
             Log.w(TAG,"Cannot open Android widget picker",e);
-            notifyWidgetError();
+            cancelPendingWidget();
         }
     }
 
@@ -224,6 +393,7 @@ public class MainActivity extends Activity {
             notifyWidgetError();
         }finally{
             pendingWidgetId=-1;
+            getPreferences(MODE_PRIVATE).edit().remove("pendingWidgetId").apply();
         }
     }
 
@@ -267,23 +437,17 @@ public class MainActivity extends Activity {
             }
             return;
         }
-        if(requestCode==REQUEST_PICK_WIDGET||requestCode==REQUEST_CONFIG_WIDGET){
-            int id=data!=null?data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,pendingWidgetId):pendingWidgetId;
-            if(resultCode!=RESULT_OK||id<0){
-                try{if(id>=0)widgetHost.deleteAppWidgetId(id);}catch(Exception ignored){}
-                pendingWidgetId=-1;notifyWidgetError();return;
+        if(requestCode==REQUEST_PICK_WIDGET || requestCode==REQUEST_CONFIG_WIDGET
+                || requestCode==REQUEST_BIND_WIDGET){
+            final int id=pendingWidgetId;
+            if(resultCode!=RESULT_OK || id<=0){
+                cancelPendingWidget();return;
             }
             if(requestCode==REQUEST_PICK_WIDGET){
-                AppWidgetProviderInfo info=AppWidgetManager.getInstance(this).getAppWidgetInfo(id);
-                if(info!=null && info.configure!=null){
-                    try{
-                        Intent config=new Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE);
-                        config.setComponent(info.configure);
-                        config.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,id);
-                        startActivityForResult(config,REQUEST_CONFIG_WIDGET);
-                        return;
-                    }catch(Exception e){Log.w(TAG,"Widget configuration unavailable",e);}
-                }
+                bindChosenWidget(id,data);return;
+            }
+            if(requestCode==REQUEST_BIND_WIDGET){
+                configureOrFinishWidget(id);return;
             }
             finishWidgetPicker(id);
         }
@@ -393,6 +557,11 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface public void pickAndroidWidget() {
             runOnUiThread(()->startWidgetPicker());
+        }
+
+        @JavascriptInterface public void syncWidgetInventory(String json) {
+            if(json==null || json.length()>12000)return;
+            runOnUiThread(()->reconcileWidgetInventory(json));
         }
 
         @JavascriptInterface public void syncWidgetRects(String json) {

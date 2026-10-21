@@ -2,13 +2,13 @@ plugins { id("com.android.application") }
 
 android {
     namespace = "com.mekai.mobile"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig {
         applicationId = "com.mekai.mobile"
         minSdk = 31
-        targetSdk = 32
-        versionCode = 10
-        versionName = "0.5.3"
+        targetSdk = 36
+        versionCode = 11
+        versionName = "0.5.4"
     }
     buildTypes { release { isMinifyEnabled = false } }
     compileOptions {

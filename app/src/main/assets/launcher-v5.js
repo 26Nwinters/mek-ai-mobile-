@@ -63,6 +63,30 @@ const Mek={
   persist(){
     const ok=store(KEY,this.model);
     if(!ok)this.toast('PHONE STORAGE IS UNAVAILABLE');
+    // The native widget host needs the complete inventory of allocated IDs.
+    // Current-page visibility is not an inventory and must not be used for
+    // deletion, or widgets on another Home page would be removed.
+    if(ok)this.scheduleWidgetInventorySync();
+  },
+  collectNativeWidgetIds(){
+    const ids=new Set();
+    for(const page of this.model.pages||[]){
+      for(const item of page.items||[]){
+        if(item.type==='android-widget'&&Number.isInteger(item.nativeId)&&item.nativeId>0)
+          ids.add(item.nativeId);
+      }
+    }
+    return [...ids].sort((a,b)=>a-b);
+  },
+  scheduleWidgetInventorySync(){
+    clearTimeout(this.widgetInventoryTimer);
+    this.widgetInventoryTimer=setTimeout(()=>this.syncWidgetInventory(),70);
+  },
+  syncWidgetInventory(){
+    const native=this.native();
+    if(!native||typeof native.syncWidgetInventory!=='function')return;
+    try{native.syncWidgetInventory(JSON.stringify(this.collectNativeWidgetIds()));}
+    catch(e){console.warn('Could not sync native widget inventory',e);}
   },
   undo(){
     if(!this.history.length){this.toast('NOTHING TO UNDO');return;}
@@ -346,6 +370,7 @@ const Mek={
   },
   refreshNative(){
     this.refreshClock();this.refreshBattery();this.showHomeSetup();
+    this.scheduleWidgetInventorySync();
     if(Date.now()-this.lastAppsRequest>300000)this.refreshApps(true);
   },
   // App icon tiles are created before they're inserted into the DOM.
@@ -500,6 +525,7 @@ const Mek={
     this.installGestures();
     this.refreshClock();this.refreshBattery();
     this.refreshApps();this.showHomeSetup();this.refreshGreeting();
+    this.scheduleWidgetInventorySync();
     this.scheduleWidgetSync();
     setInterval(()=>{this.refreshClock();this.refreshBattery();},30000);
     window.addEventListener('resize',()=>{this.renderHome();this.renderDock();if(this.view==='drawer')this.renderDrawer();});

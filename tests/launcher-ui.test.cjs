@@ -12,7 +12,7 @@ async function phone(seed=null){
   w.scrollTo=()=>{};
   w.HTMLElement.prototype.scrollTo=function(arg){this.scrollLeft=typeof arg==='object'?arg.left||0:0;};
   w.HTMLCanvasElement.prototype.getContext=()=>({beginPath(){},arc(){},fill(){},clearRect(){}});
-  const calls={launch:[],system:[],widgets:[],exports:[],imports:0,pickWidget:0,info:[],iconBatches:[]};
+  const calls={launch:[],system:[],widgets:[],widgetInventories:[],exports:[],imports:0,pickWidget:0,info:[],iconBatches:[]};
   const apps=Array.from({length:150},(_,i)=>({name:'Application '+String(i).padStart(3,'0'),pkg:'com.example.app'+i}));
   w.MEK={
     battery:()=>JSON.stringify({percent:37,charging:false}),
@@ -33,7 +33,8 @@ async function phone(seed=null){
     copyText:()=>{},
     showAppInfo:pkg=>calls.info.push(pkg),
     pickAndroidWidget:()=>calls.pickWidget++,
-    syncWidgetRects:data=>calls.widgets.push(JSON.parse(data))
+    syncWidgetRects:data=>calls.widgets.push(JSON.parse(data)),
+    syncWidgetInventory:data=>calls.widgetInventories.push(JSON.parse(data))
   };
   for(const name of ['launcher-core.js','launcher-v5.js','launcher-v5-ui.js',
     'launcher-v5-sheets.js','launcher-v5-organizer.js','launcher-v5-gestures.js'])w.eval(read(name));
@@ -427,5 +428,41 @@ test('native icon response is cached across drawer page re-renders',async()=>{
   M.renderDrawer();await new Promise(resolve=>setTimeout(resolve,120));
   assert.equal(M.iconCache.size,cacheSize);
   assert.equal(calls.iconBatches.length,before,'same icons should not be requested again');
+  dom.window.close();
+});
+
+test('complete native widget inventory tracks deletion, undo and reset across all pages',async()=>{
+  const {dom,M,calls}=await phone();await settle();
+  assert.deepEqual(Array.from(calls.widgetInventories.at(-1)),[]);
+  M.nativeWidgetChosen(401,'Phone widget',170,90);
+  await settle();
+  assert.deepEqual(Array.from(calls.widgetInventories.at(-1)),[401]);
+  const added=M.model.pages.flatMap(p=>p.items).find(i=>i.nativeId===401);
+  assert.ok(added);
+  const other=M.Core.addPage(M.model,M.model.current);
+  M.mutate(model=>{model.current=other.id;});
+  await settle();
+  assert.deepEqual(Array.from(calls.widgetInventories.at(-1)),[401],
+    'native widget on another Home page must not be deleted');
+  M.mutate(model=>M.Core.removeItem(model,added.id));
+  await settle();
+  assert.deepEqual(Array.from(calls.widgetInventories.at(-1)),[],
+    'removal sends an empty native-widget inventory');
+  M.undo();
+  await settle();
+  assert.deepEqual(Array.from(calls.widgetInventories.at(-1)),[401],
+    'undo within the native grace window preserves widget binding');
+  dom.window.close();
+});
+
+test('reloading a layout synchronizes all persisted native widget bindings',async()=>{
+  const Core=require('../app/src/main/assets/launcher-core.js');
+  const seed=Core.defaultState();
+  const other=Core.addPage(seed,seed.current);
+  Core.addHome(seed,{id:'widget-457',type:'android-widget',
+    nativeId:457,label:'Battery',w:2,h:1},other.id);
+  const {dom,calls}=await phone(seed);await settle();
+  assert.ok(calls.widgetInventories.some(ids=>ids.includes(457)),
+    'restored pages must report their widget IDs to Android');
   dom.window.close();
 });

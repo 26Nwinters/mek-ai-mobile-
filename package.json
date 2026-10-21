@@ -1,8 +1,8 @@
 {
   "name": "mek-ai-mobile",
   "private": true,
-  "version": "0.5.2",
-  "description": "Android launcher home-grid validation and UI smoke tests",
+  "version": "0.5.4",
+  "description": "Android launcher home-grid and lifecycle validation",
   "scripts": {
     "test": "node --test --test-force-exit tests/*.test.cjs"
   },
