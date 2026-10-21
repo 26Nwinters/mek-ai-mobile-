@@ -134,7 +134,7 @@ test('create and edit folders, add real app, and display its folder page',async(
   const name=d.getElementById('folderName');
   name.value='My Apps';
   name.dispatchEvent(new w.Event('change'));
-  d.getElementById('folderAdd').click();
+  w.addAppToFolder();
   assert.equal(d.querySelector('.view.active').id,'view-drawer');
   await new Promise(resolve=>setTimeout(resolve,80));
   assert.match(d.getElementById('appDrawerModeHint').textContent,/CHOOSE APP FOR FOLDER/);

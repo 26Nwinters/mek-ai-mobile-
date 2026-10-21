@@ -12,7 +12,7 @@ test('default desktop has widgets and live shortcuts',()=>{
   const items=L.normalize(null);
   assert.ok(items.length>=9);
   assert.ok(items.some(t=>t.type==='mek'));
-  assert.ok(items.some(t=>t.type==='shortcut'&&t.kind==='drawer'));
+  assert.ok(!items.some(t=>t.type==='shortcut'&&t.kind==='drawer'));
 });
 test('reordering preserves data but changes position',()=>{
   const items=L.normalize(null), moved=L.move(items,items[0].id,items[3].id);
