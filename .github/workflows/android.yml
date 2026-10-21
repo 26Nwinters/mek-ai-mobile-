@@ -32,11 +32,26 @@ jobs:
         run: |
           python -m pip install --quiet pillow
           python tools/prepare_art.py
+      # Optional private signing keystore enables updates without uninstalling.
+      # Configure MEK_DEBUG_KEYSTORE_B64 in GitHub Actions repository secrets.
+      # Never commit a signing keystore or its password to this public repository.
+      - name: Restore optional persistent development signing key
+        env:
+          MEK_DEBUG_KEYSTORE_B64: ${{ secrets.MEK_DEBUG_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$MEK_DEBUG_KEYSTORE_B64" ]; then
+            mkdir -p "$HOME/.android"
+            printf '%s' "$MEK_DEBUG_KEYSTORE_B64" | base64 --decode > "$HOME/.android/debug.keystore"
+            chmod 600 "$HOME/.android/debug.keystore"
+            echo "Using securely supplied stable debug signing key."
+          else
+            echo "No stable key configured; Gradle will use its ephemeral debug key."
+          fi
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace :app:assembleDebug
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: MEK-AI-Mobile-v0.4.0-debug
+          name: MEK-AI-Mobile-v0.5.0-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

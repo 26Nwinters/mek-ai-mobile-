@@ -4,175 +4,235 @@ const fs=require('node:fs');
 const path=require('node:path');
 const {JSDOM}=require('jsdom');
 const assets=path.resolve(__dirname,'../app/src/main/assets');
-function read(name){return fs.readFileSync(path.join(assets,name),'utf8');}
-async function createPhone(){
-  const dom=new JSDOM(read('index.html'),{url:'https://mek.local/',runScripts:'outside-only',pretendToBeVisual:true});
+const read=name=>fs.readFileSync(path.join(assets,name),'utf8');
+async function phone(){
+  const dom=new JSDOM(read('index.html'),{url:'https://mek.invalid/',runScripts:'outside-only',pretendToBeVisual:true});
   const w=dom.window;
   w.scrollTo=()=>{};
-  w.setInterval=()=>0;
-  w.HTMLCanvasElement.prototype.getContext=()=>({clearRect(){},beginPath(){},arc(){},fill(){}});
+  w.HTMLElement.prototype.scrollTo=function(arg){this.scrollLeft=typeof arg==='object'?arg.left||0:0;};
+  w.HTMLCanvasElement.prototype.getContext=()=>({beginPath(){},arc(){},fill(){},clearRect(){}});
+  const calls={launch:[],system:[],widgets:[],exports:[],imports:0,pickWidget:0,info:[]};
   const apps=Array.from({length:150},(_,i)=>({name:'Application '+String(i).padStart(3,'0'),pkg:'com.example.app'+i}));
   w.MEK={
-    battery:()=>JSON.stringify({percent:72,charging:false}),
+    battery:()=>JSON.stringify({percent:37,charging:false}),
     isDefaultHome:()=>true,
-    getAppIcon:()=>'',requestAppIcon:(pkg)=>w.setTimeout(()=>w.mekIconReady(pkg,''),0),
-    openDefault:()=>{},
+    requestHomeRole:()=>{},
     requestApps:()=>w.setTimeout(()=>w.mekAppsReady(JSON.stringify(apps)),0),
-    launchApp:()=>{},requestHomeRole:()=>{}
+    requestAppIcon:pkg=>w.setTimeout(()=>w.mekIconReady(pkg,''),0),
+    launchApp:pkg=>calls.launch.push(pkg),
+    openDefault:kind=>calls.system.push(kind),
+    exportLayout:json=>calls.exports.push(json),
+    importLayout:()=>calls.imports++,
+    copyText:()=>{},
+    showAppInfo:pkg=>calls.info.push(pkg),
+    pickAndroidWidget:()=>calls.pickWidget++,
+    syncWidgetRects:data=>calls.widgets.push(JSON.parse(data))
   };
-  w.eval(read('layout-core.js'));
-  w.eval(read('mobile.js'));
-  await new Promise(resolve=>setImmediate(resolve));
-  return dom;
+  for(const name of ['launcher-core.js','launcher-v5.js','launcher-v5-ui.js',
+    'launcher-v5-sheets.js','launcher-v5-gestures.js'])w.eval(read(name));
+  await new Promise(resolve=>setTimeout(resolve,45));
+  if(!w.document.querySelector('.home-page'))w.Mek.install();
+  return {dom,w,d:w.document,M:w.Mek,calls};
 }
 function touch(w,target,type,x,y){
   const e=new w.Event(type,{bubbles:true,cancelable:true});
   const point={clientX:x,clientY:y};
-  Object.defineProperty(e,'touches',{value:type==='touchstart'?[point]:[]});
-  Object.defineProperty(e,'changedTouches',{value:[point]});
+  Object.defineProperties(e,{
+    touches:{value:type==='touchstart'?[point]:[]},
+    changedTouches:{value:[point]}
+  });
   target.dispatchEvent(e);
 }
-function swipe(w,element,x1,y1,x2,y2){
-  touch(w,element,'touchstart',x1,y1);
-  touch(w,element,'touchend',x2,y2);
+function swipe(w,target,x1,y1,x2,y2){
+  touch(w,target,'touchstart',x1,y1);
+  touch(w,target,'touchend',x2,y2);
 }
-test('no navigation bar or permanent Apps button; home has full six-row grid pages',async()=>{
-  const dom=await createPhone(),w=dom.window,d=w.document;
-  assert.equal(d.getElementById('bottomNav'),null);
-  assert.equal(d.getElementById('appSwipeHandle'),null);
-  assert.equal(d.querySelectorAll('.home-tile').length,9);
-  assert.equal(d.querySelectorAll('.home-page').length,2);
-  assert.equal(d.querySelectorAll('.home-page [data-type="shortcut"] .home-app-label').length,3);
-  assert.equal(d.querySelectorAll('.home-tile[data-type="shortcut"] .home-app-label').length,3);
-  assert.equal(d.getElementById('topBattery').textContent,'72%');
-  assert.equal(d.querySelector('.home-page').style.getPropertyValue('--grid-rows'),'6');
-  assert.equal(d.querySelectorAll('#pageRailDots button').length,5); // MEK, two home pages, controls, settings
+const settle=()=>new Promise(resolve=>setTimeout(resolve,80));
+
+test('initial screen has editable independent desktop and fixed favorites dock',async()=>{
+  const {dom,M,d}=await phone();
+  assert.equal(d.querySelectorAll('.home-page').length,1);
+  assert.equal(d.querySelectorAll('#dock .dock-slot').length,4);
+  assert.deepEqual(Array.from(d.querySelectorAll('#dock .dock-slot')).map(x=>x.dataset.uid),
+    ['dock-phone','dock-messages','dock-browser','dock-camera']);
+  assert.equal(d.getElementById('systemBattery').textContent,'37%');
+  assert.equal(d.querySelectorAll('.bottom-nav,.nav-item').length,0);
+  assert.equal(d.querySelector('.home-page').style.getPropertyValue('--home-cols'),'4');
+  assert.equal(d.querySelector('.home-page').style.getPropertyValue('--home-rows'),'6');
   dom.window.close();
 });
-test('Samsung-style separate grids default to 4×6 home, 5×6 apps and 4×4 folder',async()=>{
-  const dom=await createPhone(),w=dom.window,d=w.document;
-  assert.equal(d.getElementById('homeGridSummary').textContent,'4×6 ↗');
-  assert.equal(d.getElementById('appsGridSummary').textContent,'5×6 ↗');
-  assert.equal(d.getElementById('foldersGridSummary').textContent,'4×4 ↗');
-  w.openEditor('grid-home');assert.match(d.getElementById('editorHeading').textContent,/HOME SCREEN GRID/);
-  w.setGridDimension('grid-home','rows',7);
-  w.setGridDimension('grid-home','cols',5);
-  assert.equal(d.getElementById('homeGridSummary').textContent,'5×7 ↗');
-  assert.equal(d.querySelector('.home-page').style.getPropertyValue('--grid-cols'),'5');
-  assert.equal(d.querySelector('.home-page').style.getPropertyValue('--grid-rows'),'7');
-  w.setGridDimension('grid-apps','cols',4);
-  w.setGridDimension('grid-apps','rows',5);
-  w.setGridDimension('grid-folders','cols',3);
-  w.setGridDimension('grid-folders','rows',5);
-  assert.equal(d.getElementById('appsGridSummary').textContent,'4×5 ↗');
-  assert.equal(d.getElementById('foldersGridSummary').textContent,'3×5 ↗');
-  assert.equal(d.getElementById('homeGridSummary').textContent,'5×7 ↗');
+
+test('home swipes left/right and dock stays identical between pages',async()=>{
+  const {dom,w,M,d}=await phone();
+  M.mutate(model=>{M.Core.addPage(model,model.current);});
+  const initial=Array.from(d.querySelectorAll('.dock-slot')).map(x=>x.dataset.uid);
+  swipe(w,d.getElementById('homeViewport'),300,300,90,305);
+  assert.equal(M.model.current,M.model.pages[1].id);
+  assert.deepEqual(Array.from(d.querySelectorAll('.dock-slot')).map(x=>x.dataset.uid),initial);
+  swipe(w,d.getElementById('homeViewport'),90,305,300,300);
+  assert.equal(M.model.current,M.model.pages[0].id);
   dom.window.close();
 });
-test('app drawer shows 5 columns × 6 rows and 150 apps on 5 swipeable pages',async()=>{
-  const dom=await createPhone(),w=dom.window,d=w.document;
-  w.openAppDrawer();
-  await new Promise(resolve=>setTimeout(resolve,65));
-  assert.equal(d.querySelectorAll('.app-page').length,5);
-  assert.equal(d.querySelectorAll('#appPageDots button').length,5);
-  assert.match(d.getElementById('appCount').textContent,/150 APPS/);
-  assert.equal(d.querySelector('.app-page').style.getPropertyValue('--app-cols'),'5');
-  assert.equal(d.querySelector('.app-page').style.getPropertyValue('--app-rows'),'6');
-  assert.equal(d.querySelectorAll('.app-page[data-page-index="0"] .app-button').length,30);
-  w.goToAppPage(4,true);
-  assert.equal(d.querySelectorAll('.app-page[data-page-index="4"] .app-button').length,30);
+
+test('swipe up anywhere on Home opens horizontally paged 5x6 app drawer',async()=>{
+  const {dom,w,M,d}=await phone();
+  await settle();
+  swipe(w,d.getElementById('homeViewport'),170,330,171,150);
+  assert.equal(M.view,'drawer');
+  assert.equal(d.querySelectorAll('.app-page').length,6); // 150 installed + 3 MEK system entries
+  assert.equal(d.querySelectorAll('.app-page[data-page="0"] .app-page-cell').length,30);
+  M.goDrawerPage(3);
+  assert.equal(d.querySelectorAll('#drawerDots button.active').length,1);
+  assert.equal(M.drawerPage,3);
+  swipe(w,d.getElementById('screen-drawer'),170,150,171,350);
+  assert.equal(M.view,'home');
   dom.window.close();
 });
-test('swipe up from central home opens apps, down closes, sideways changes home and MEK pages',async()=>{
-  const dom=await createPhone(),w=dom.window,d=w.document;
-  swipe(w,d.getElementById('view-home'),160,420,160,245);
-  assert.equal(d.querySelector('.view.active').id,'view-drawer');
-  await new Promise(resolve=>setTimeout(resolve,65));
-  swipe(w,d.getElementById('view-drawer'),160,230,160,370);
-  assert.equal(d.querySelector('.view.active').id,'view-home');
-  swipe(w,d.getElementById('view-home'),180,280,320,285); // swipe right from home => MEK
-  assert.equal(d.querySelector('.view.active').id,'view-mek');
-  swipe(w,d.getElementById('view-mek'),320,250,110,255); // left => Home
-  assert.equal(d.querySelector('.view.active').id,'view-home');
-  swipe(w,d.getElementById('view-home'),320,275,110,275); // left => second Home
-  assert.equal(d.querySelector('.view.active').id,'view-home');
-  assert.equal(d.getElementById('pageRailLabel').textContent,'HOME 2');
-  swipe(w,d.getElementById('view-home'),320,275,110,275); // left => Control
-  assert.equal(d.querySelector('.view.active').id,'view-controls');
-  swipe(w,d.getElementById('view-controls'),320,275,110,275); // left => Setup
-  assert.equal(d.querySelector('.view.active').id,'view-settings');
-  swipe(w,d.getElementById('view-settings'),110,275,320,275); // right => Control
-  assert.equal(d.querySelector('.view.active').id,'view-controls');
+
+test('long-press edit, widget picker and app chooser add actual app tiles',async()=>{
+  const {dom,M,d}=await phone();await settle();
+  M.enterEdit();
+  assert.equal(d.body.classList.contains('editing'),true);
+  M.openSheet('widgets');
+  const available=Array.from(d.querySelectorAll('.picker-grid button'));
+  assert.ok(available.length>=9);
+  M.addWidget('notes');
+  assert.ok(M.model.pages.some(p=>p.items.some(i=>i.kind==='notes')));
+  M.openSheet('apps-picker');
+  const selected=Array.from(d.querySelectorAll('.picker-apps .icon-tile'))
+    .find(x=>x.getAttribute('aria-label')==='Application 001');
+  assert.ok(selected);
+  selected.click();
+  assert.ok(M.model.pages.some(p=>p.items.some(i=>i.pkg==='com.example.app1')));
+  assert.equal(M.sheet,null);
+  M.exitEdit();
+  assert.equal(d.body.classList.contains('editing'),false);
   dom.window.close();
 });
-test('pin app from Apps chooser after longpress editing and keep it in home grid',async()=>{
-  const dom=await createPhone(),w=dom.window,d=w.document;
-  w.enterEditMode();
-  assert.ok(d.querySelectorAll('.tile-drag-handle').length>=9);
-  w.openEditor('apps');
-  await new Promise(resolve=>setTimeout(resolve,80));
-  assert.equal(d.querySelector('.view.active').id,'view-drawer');
-  assert.equal(d.getElementById('appDrawerModeHint').classList.contains('hidden'),false);
-  const btn=d.querySelector('#appPageTrack .app-button');
-  assert.ok(btn,'app chooser has apps');
-  btn.click();
-  assert.equal(d.querySelector('.view.active').id,'view-home');
-  const pinned=d.querySelector('.home-tile[data-type="app"]');
-  assert.ok(pinned,'new app tile exists');
-  assert.equal(pinned.querySelector('.home-app-label').textContent,'Application 000');
-  assert.equal(d.querySelectorAll('.home-tile').length,10);
-  assert.equal(d.querySelector('.edit-home')!==null,true);
-  w.exitEditMode();
+
+test('the app drawer long-press drag transitions into edit Home and drops application',async()=>{
+  const {dom,M,w,d}=await phone();await settle();
+  M.setView('drawer');
+  const app=Array.from(d.querySelectorAll('.app-page-cell')).find(n=>n.dataset.pkg==='com.example.app2');
+  assert.ok(app);
+  touch(w,app,'touchstart',160,230);
+  await new Promise(resolve=>setTimeout(resolve,530));
+  assert.equal(M.view,'home');
+  assert.ok(M.drag);
+  touch(w,d,'touchend',160,230);
+  assert.equal(M.drag,null);
+  assert.ok(M.model.pages.some(p=>p.items.some(i=>i.pkg==='com.example.app2')));
   dom.window.close();
 });
-test('create and edit folders, add real app, and display its folder page',async()=>{
-  const dom=await createPhone(),w=dom.window,d=w.document;
-  w.enterEditMode();
-  w.createFolder();
-  assert.equal(d.getElementById('folderOverlay').classList.contains('hidden'),false);
-  assert.equal(d.querySelectorAll('.home-tile[data-type="folder"]').length,1);
-  const name=d.getElementById('folderName');
-  name.value='My Apps';
-  name.dispatchEvent(new w.Event('change'));
-  w.addAppToFolder();
-  assert.equal(d.querySelector('.view.active').id,'view-drawer');
-  await new Promise(resolve=>setTimeout(resolve,80));
-  assert.match(d.getElementById('appDrawerModeHint').textContent,/CHOOSE APP FOR FOLDER/);
-  d.querySelector('#appPageTrack .app-button').click();
-  assert.equal(d.querySelector('.view.active').id,'view-home');
-  assert.equal(d.getElementById('folderOverlay').classList.contains('hidden'),false);
-  assert.equal(d.querySelectorAll('.folder-page .app-button').length,1);
-  assert.equal(d.getElementById('folderName').value,'My Apps');
-  w.closeFolder();
-  w.exitEditMode();
-  const folderTile=d.querySelector('.home-tile[data-type="folder"]');
-  assert.equal(folderTile.querySelector('.home-app-label').textContent,'My Apps');
+
+test('dock slots can hold installed apps and retain their favorites across screens',async()=>{
+  const {dom,M,d}=await phone();await settle();
+  M.openSheet('dock-select',{slot:1});
+  assert.equal(M.picking.type,'dock');
+  const chosen=Array.from(d.querySelectorAll('.picker-apps .icon-tile'))
+    .find(x=>x.getAttribute('aria-label')==='Application 004');
+  chosen.click();
+  assert.equal(M.model.dock[1].pkg,'com.example.app4');
+  const dockId=M.model.dock[1].id;
+  M.mutate(model=>{M.Core.addPage(model,model.current);});
+  M.goPage(M.model.pages[1].id);
+  assert.equal(d.querySelectorAll('#dock .dock-slot')[1].dataset.uid,dockId);
   dom.window.close();
 });
-test('changing app grid paginates according to independently saved dimensions',async()=>{
-  const dom=await createPhone(),w=dom.window,d=w.document;
-  w.setGridDimension('grid-apps','cols',4);
-  w.setGridDimension('grid-apps','rows',4);
-  w.openAppDrawer();await new Promise(resolve=>setTimeout(resolve,80));
-  assert.equal(d.querySelectorAll('.app-page').length,10);
-  assert.equal(d.querySelectorAll('.app-page[data-page-index="0"] .app-button').length,16);
-  assert.equal(d.querySelector('.app-page').style.getPropertyValue('--app-cols'),'4');
-  assert.equal(d.querySelector('.app-page').style.getPropertyValue('--app-rows'),'4');
+
+test('folders support naming, colors, application contents and separate 4x4 grids',async()=>{
+  const {dom,M,d}=await phone();await settle();
+  M.openSheet('folder-create');
+  const create=Array.from(d.querySelectorAll('.option-button'))
+    .find(x=>x.textContent.includes('PLACE ON HOME'));
+  create.click();
+  assert.ok(M.activeFolder);
+  const folder=M.findFolder(M.activeFolder);
+  assert.ok(folder);
+  assert.equal(d.querySelector('.folder-page').style.getPropertyValue('--folder-cols'),'4');
+  assert.equal(d.querySelector('.folder-page').style.getPropertyValue('--folder-rows'),'4');
+  M.picking={type:'folder',folderId:folder.id};
+  M.openSheet('apps-picker');
+  const app=Array.from(d.querySelectorAll('.picker-apps .icon-tile'))
+    .find(x=>x.getAttribute('aria-label')==='Application 006');
+  app.click();
+  assert.equal(folder.apps.length,1);
+  M.openSheet('folder-color');
+  const amber=Array.from(d.querySelectorAll('.option-button')).find(x=>x.textContent.includes('AMBER'));
+  amber.click();
+  assert.equal(folder.color,'amber');
+  M.closeSheet();M.closeFolder();
+  assert.ok(M.model.pages.some(p=>p.items.some(i=>i.type==='folder'&&i.apps.length===1)));
   dom.window.close();
 });
-test('clock, battery, workshop note copies and other views remain functional',async()=>{
-  const dom=await createPhone(),w=dom.window,d=w.document;
-  w.enterEditMode();
-  for(const label of ['Battery monitor','Dot clock','Workshop note']){
-    w.openEditor('widgets');
-    const pick=Array.from(d.querySelectorAll('.widget-pick')).find(n=>n.textContent.includes(label));
-    pick.click();
-  }
-  w.exitEditMode();
-  assert.equal(d.querySelectorAll('.home-tile[data-type="battery"]').length,2);
-  assert.deepEqual(Array.from(d.querySelectorAll('.home-tile[data-type="battery"] .widget-reading')).map(x=>x.textContent),['72%','72%']);
-  assert.equal(d.querySelectorAll('.tile-dot-clock').length,2);
-  w.navigate('mek');w.navigate('controls');w.navigate('settings');w.navigate('home');
-  assert.equal(d.querySelector('.view.active').id,'view-home');
+
+test('grid settings modify rows and columns separately',async()=>{
+  const {dom,M,d}=await phone();
+  M.openSheet('grid-home');
+  M.mutate(model=>{model.settings.homeCols=5;model.settings.homeRows=7;M.Core.reflow(model);});
+  assert.equal(d.getElementById('homeGridValue').textContent,'5×7');
+  M.openSheet('grid-apps');
+  M.mutate(model=>{model.settings.appCols=4;model.settings.appRows=5;});
+  assert.equal(d.getElementById('appGridValue').textContent,'4×5');
+  M.openSheet('grid-folders');
+  M.mutate(model=>{model.settings.folderCols=3;model.settings.folderRows=5;});
+  assert.equal(d.getElementById('folderGridValue').textContent,'3×5');
+  dom.window.close();
+});
+
+test('backup and restoration include pages, folders, dock, tasks and notes',async()=>{
+  const {dom,M,calls}=await phone();
+  M.mutate(model=>{
+    model.notes='My personal workshop';
+    model.tasks.push({text:'Finish project',done:false});
+  });
+  M.exportBackup();
+  assert.equal(calls.exports.length,1);
+  const json=calls.exports[0];
+  M.mutate(model=>{model.notes='Erase';model.tasks=[];});
+  M.backupImported(json);
+  assert.equal(M.model.notes,'My personal workshop');
+  assert.equal(M.model.tasks[0].text,'Finish project');
+  dom.window.close();
+});
+
+test('true Android AppWidgetHost callback creates resizable native widget placement',async()=>{
+  const {dom,M,calls,d}=await phone();
+  M.chooseNativeWidget();
+  assert.equal(calls.pickWidget,1);
+  M.nativeWidgetChosen(357,'Clock from another app',170,90);
+  assert.ok(M.model.pages.flatMap(p=>p.items).some(x=>x.type==='android-widget'&&x.nativeId===357));
+  assert.ok(d.querySelector('.native-widget-placeholder'));
+  assert.equal(M.edit,true);
+  M.exitEdit();
+  await settle();
+  assert.ok(calls.widgets.length>0);
+  dom.window.close();
+});
+
+test('native home action exits editing and returns to chosen default desktop page',async()=>{
+  const {dom,M}=await phone();
+  M.mutate(model=>{M.Core.addPage(model,model.current);model.settings.homeDefault=model.pages[1].id;});
+  M.goPage(M.model.pages[0].id);
+  M.setView('settings');
+  M.nativeHome();
+  assert.equal(M.view,'home');
+  assert.equal(M.model.current,M.model.settings.homeDefault);
+  assert.equal(M.edit,false);
+  dom.window.close();
+});
+
+test('search filters installed app pages and custom theme options remain usable',async()=>{
+  const {dom,M,w,d}=await phone();await settle();
+  M.setView('drawer');
+  const search=d.getElementById('appSearch');
+  search.value='Application 011';
+  search.dispatchEvent(new w.Event('input',{bubbles:true}));
+  assert.equal(d.querySelectorAll('.app-page').length,1);
+  assert.equal(d.querySelectorAll('.app-page-cell').length,1);
+  M.openSheet('themes');
+  const amber=Array.from(d.querySelectorAll('.option-button')).find(x=>x.textContent.includes('AMBER INDUSTRIAL'));
+  amber.click();
+  assert.equal(d.body.classList.contains('theme-amber'),true);
   dom.window.close();
 });

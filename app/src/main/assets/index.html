@@ -1,170 +1,151 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#090f0c"><title>MEK-AI Mobile</title>
-  <link rel="stylesheet" href="mobile.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#0b100c">
+  <meta name="color-scheme" content="dark">
+  <title>MEK-AI Mobile</title>
+  <link rel="stylesheet" href="launcher-v5.css">
 </head>
-<body>
-  <div class="ambient"></div>
-  <div id="shell" class="shell">
-    <div class="chrome">
-      <div class="chrome-brand"><span class="signal-lamp"></span> MEK-AI <span class="muted">/ MOBILE</span></div>
-      <div class="chrome-right"><span id="topTime">10:24</span><span class="statusBattery" id="topBattery">--%</span></div>
+<body class="theme-overgrown" data-view="home">
+  <div class="wallpaper" id="wallpaper" aria-hidden="true"></div>
+  <div class="texture-shade" aria-hidden="true"></div>
+
+  <div class="launcher-shell" id="launcherShell">
+    <header class="terminal-status" id="terminalStatus">
+      <div class="terminal-brand"><span class="status-beacon"></span> MEK-AI <span class="terminal-version">/ MOBILE</span></div>
+      <div class="terminal-readouts"><span id="systemTime">--:--</span><span id="systemBattery">--%</span></div>
+    </header>
+
+    <main class="launcher-content">
+      <section class="screen active" id="screen-home" aria-label="Home screens">
+        <div class="home-topline"><span id="homeEyebrow">THE HIDEAWAY / HOME</span><button id="openEdit" class="subtle-edit" aria-label="Edit Home">✎</button></div>
+        <div class="home-viewport" id="homeViewport" aria-label="Swipeable Home pages">
+          <div class="home-track" id="homeTrack"></div>
+        </div>
+        <div id="homePageDots" class="home-page-dots" aria-label="Home page indicator"></div>
+        <div class="dock-wrap">
+          <div class="dock" id="dock" aria-label="Favorites dock"></div>
+        </div>
+      </section>
+
+      <section class="screen drawer-screen" id="screen-drawer" aria-label="All applications">
+        <div class="drawer-header">
+          <div class="drawer-title"><span class="micro-label">YOUR DEVICE / APPLICATIONS</span><strong>APP <em>ARCHIVE</em></strong></div>
+          <button id="closeDrawer" class="icon-button" aria-label="Close app drawer">⌄</button>
+        </div>
+        <label class="app-search"><span>⌕</span><input id="appSearch" autocomplete="off" type="search" placeholder="Search your apps" aria-label="Search installed applications"/></label>
+        <div class="drawer-meta"><span id="appCount">DISCOVERING APPS</span><span>SWIPE ↔</span></div>
+        <div id="drawerPages" class="drawer-pages" aria-label="Horizontally paged installed apps"><div id="drawerTrack" class="drawer-track"></div></div>
+        <div id="drawerDots" class="drawer-dots" aria-label="Application page dots"></div>
+        <div class="drawer-footer">SWIPE DOWN TO GO HOME <span>⌄</span></div>
+      </section>
+
+      <section class="screen sub-screen" id="screen-assistant" aria-label="MEK-AI companion">
+        <div class="sub-header"><button class="back-action" data-close-sub aria-label="Back to Home">‹</button><div><span class="micro-label">MECHANICAL COMPANION / MK-01</span><h1>MEK-<em>AI</em></h1></div></div>
+        <div class="assistant-card">
+          <img src="mek.webp" alt="MEK-AI's original expressive amber-eyed robot" class="assistant-image">
+          <div class="assistant-identity"><span class="status-line">● COMPANION ONLINE</span><strong>HELLO,<br>OPERATOR.</strong><span id="assistantGreeting">I was absolutely not taking a nap.</span></div>
+        </div>
+        <div class="sub-section-title">THE WORKSHOP / ACTIONS</div>
+        <button class="large-action" data-action="assistant">TALK TO MEK-AI <span>↗</span></button>
+        <button class="large-action secondary" data-screen="house">HOUSE CONTROLS <span>↗</span></button>
+        <p class="muted-paragraph">The voice companion runs through your existing MEK-AI web assistant. The launcher itself doesn't listen continuously.</p>
+      </section>
+
+      <section class="screen sub-screen" id="screen-house" aria-label="Device and house controls">
+        <div class="sub-header"><button class="back-action" data-close-sub aria-label="Back to Home">‹</button><div><span class="micro-label">THE HIDEAWAY / CONTROL DECK</span><h1>HOUSE <em>CONTROLS</em></h1></div></div>
+        <div class="control-tiles">
+          <button data-action="wifi"><span>⌁</span>WI-FI <small>ANDROID SETTINGS ↗</small></button>
+          <button data-action="bluetooth"><span>ᛒ</span>BLUETOOTH <small>ANDROID SETTINGS ↗</small></button>
+          <button data-action="display"><span>◉</span>DISPLAY <small>ANDROID SETTINGS ↗</small></button>
+          <button data-action="battery"><span>▣</span>BATTERY <small>DEVICE DETAILS ↗</small></button>
+        </div>
+        <div class="house-card">
+          <span class="micro-label amber">● LIGHT CONTROL / EXTERNAL SERVICE</span>
+          <h2>THE WORKSHOP IS LISTENING.</h2>
+          <p>MEK-AI's home-control connection runs through your existing controller. This launcher won't show switches as connected until there is a verified connection.</p>
+          <button class="large-action" data-action="assistant">OPEN MEK-AI CONTROLS ↗</button>
+        </div>
+      </section>
+
+      <section class="screen sub-screen settings-screen" id="screen-settings" aria-label="Launcher settings">
+        <div class="sub-header"><button class="back-action" data-close-sub aria-label="Back to Home">‹</button><div><span class="micro-label">PERSONALIZE / TERMINAL</span><h1>HOME <em>SETTINGS</em></h1></div></div>
+        <div class="setting-category">DISPLAY GRIDS</div>
+        <div class="settings-card">
+          <button data-sheet="grid-home"><span>HOME SCREEN GRID<small>Icons and widgets on every Home page</small></span><b id="homeGridValue">4×6</b></button>
+          <button data-sheet="grid-apps"><span>APPS SCREEN GRID<small>Icons per app drawer page</small></span><b id="appGridValue">5×6</b></button>
+          <button data-sheet="grid-folders"><span>FOLDER GRID<small>Icons inside each folder</small></span><b id="folderGridValue">4×4</b></button>
+        </div>
+        <div class="setting-category">DESKTOP & FAVORITES</div>
+        <div class="settings-card">
+          <button data-sheet="pages"><span>MANAGE HOME PAGES<small>Reorder, create, remove or choose default</small></span><b>↗</b></button>
+          <button data-sheet="dock"><span>DOCK / HOTBAR<small>Slots and dock background</small></span><b id="dockCountValue">4 SLOTS</b></button>
+          <button data-sheet="appearance"><span>ICONS & LABELS<small>Icon size, text and wallpaper</small></span><b>↗</b></button>
+          <button data-sheet="themes"><span>TERMINAL THEMES<small>Overgrown, Amber and Moss</small></span><b>↗</b></button>
+          <button data-sheet="gestures"><span>GESTURE OPTIONS<small>Home and app drawer interactions</small></span><b>↗</b></button>
+          <button data-sheet="drawer-sort"><span>APP ORDER<small>Alphabetical or custom</small></span><b id="appSortValue">A–Z</b></button>
+        </div>
+        <div class="setting-category">MAINTENANCE</div>
+        <div class="settings-card">
+          <button data-sheet="backup"><span>BACKUP & RESTORE<small>Export a layout file or restore a backup</small></span><b>↗</b></button>
+          <button data-sheet="reset"><span>RESTORE DEFAULT LAYOUT<small>Choose what to reset</small></span><b>↗</b></button>
+          <button data-action="home"><span>DEFAULT HOME APP<small>Switch between Samsung and MEK-AI</small></span><b>↗</b></button>
+          <button data-action="settings"><span>ANDROID SETTINGS<small>Open your system settings</small></span><b>↗</b></button>
+        </div>
+        <div class="settings-note">MEK-AI MOBILE v0.5.0 · A CUSTOM HOME LAUNCHER, NOT AN ANDROID ROM.</div>
+      </section>
+    </main>
+
+    <div id="editToolbar" class="edit-toolbar hidden" aria-label="Edit Home screen">
+      <div class="edit-top"><span><i class="edit-indicator"></i> PERSONALIZE HOME</span><button id="finishEdit" class="edit-done">DONE ✓</button></div>
+      <div class="edit-actions">
+        <button data-sheet="widgets"><span>▧</span> WIDGETS</button>
+        <button data-sheet="apps-picker"><span>▦</span> APPS</button>
+        <button data-sheet="pages"><span>▤</span> PAGES</button>
+        <button data-sheet="appearance"><span>◈</span> WALLPAPER</button>
+        <button data-sheet="themes"><span>◐</span> THEMES</button>
+        <button data-screen="settings"><span>⚙</span> SETTINGS</button>
+      </div>
     </div>
 
-    <section id="view-home" class="view active" aria-label="Customizable home screen">
-      <div class="home-dashboard-header" id="homeHoldZone">
-        <div class="micro-label">THE HIDEAWAY <span class="line"></span> PERSONAL TERMINAL</div>
-        <div class="home-dashboard-line">
-          <span class="home-dashboard-title">MY <em>WORKSHOP.</em></span>
-          <button id="editHomeButton" class="customize-btn" onclick="enterEditMode()">✎ CUSTOMIZE</button>
-        </div>
-      </div>
-      <div id="editToolbar" class="edit-toolbar hidden">
-        <div class="edit-toolbar-top"><span>✳ PERSONALIZE HOME</span><button onclick="exitEditMode()" class="edit-done">DONE ✓</button></div>
-        <div class="edit-toolbar-actions">
-          <button onclick="openEditor('widgets')">＋ WIDGET</button>
-          <button onclick="openEditor('apps')">＋ APP</button>
-          <button onclick="createFolder()">＋ FOLDER</button>
-          <button onclick="addHomePage()">＋ PAGE</button>
-          <button onclick="openEditor('grid-home')">▥ GRID</button>
-          <button onclick="openEditor('themes')">◐ THEME</button>
-        </div>
-      </div>
-      <div id="homeGrid" class="launcher-grid" role="region" aria-label="Horizontally swipeable home screen tiles"></div>
-      <div id="homeHelp" class="grid-instruction">SWIPE UP FOR APPS · SWIPE SIDEWAYS FOR PAGES <span>✳</span></div>
-      <div class="home-bottom-note">WHERE STORIES TAKE ROOT. <span>✳</span></div>
-    </section>
-    <section id="view-drawer" class="view drawer-view" aria-label="Swipeable app drawer">
-      <div class="drawer-heading-row">
-        <div><div class="page-eyebrow">YOUR DEVICE / ALL APPLICATIONS</div><h1>APP <em>ARCHIVE</em></h1></div>
-        <button class="drawer-close" onclick="closeAppDrawer()" aria-label="Close app drawer">⌄</button>
-      </div>
-      <div class="search-wrapper drawer-search"><span>⌕</span><input id="appSearch" type="search" placeholder="Search installed apps" autocomplete="off"></div>
-      <div id="appDrawerModeHint" class="drawer-pick-hint hidden">SELECT AN APP TO PIN TO YOUR HOME SCREEN <button onclick="cancelAppPick()">CANCEL</button></div>
-      <div class="drawer-description"><span id="appCount">LOADING APPS</span><span>SWIPE SIDEWAYS TO BROWSE</span></div>
-      <div id="appPages" class="app-pages" aria-label="Application pages">
-        <div id="appPageTrack" class="app-page-track"></div>
-      </div>
-      <div id="appEmpty" class="empty hidden">No apps match your search.</div>
-      <div id="appPageDots" class="app-page-dots" role="group" aria-label="Choose app page"></div>
-      <div class="drawer-bottom-caption">SWIPE DOWN TO RETURN HOME <span>⌄</span></div>
-    </section>
-
-    <section id="view-mek" class="view" aria-label="MEK-AI companion">
-      <div class="page-eyebrow">MECHANICAL COMPANION / MK-01</div>
-      <h1>THE <em>HIDEAWAY</em></h1>
-      <div class="mek-stage">
-        <div class="mek-halo"></div>
-        <img src="mek.webp" alt="MEK-AI from the approved character reference" class="mek-portrait">
-        <div class="stage-label">UNIT: MEK-AI <span>● READY</span></div>
-      </div>
-      <div class="bot-dialog">
-        <div class="micro-label warm">MEK-AI / A LITTLE NOTE</div>
-        <p id="mekGreeting">Oh. Hello there. I was absolutely not taking a nap.</p>
-      </div>
-      <div class="section-title"><span>COMPANION CONTROLS</span><span class="muted micro-label">WEB ASSISTANT</span></div>
-      <button class="primary-action" onclick="MEK.openDefault('assistant')">OPEN MEK-AI ASSISTANT <span>↗</span></button>
-      <div class="small-print">Opens your existing MEK-AI web companion. Voice, timers, and smart-home features depend on its own permissions and controller connection.</div>
-      <div class="pair-tiles">
-        <button class="tile" onclick="navigate('controls')"><span class="setting-icon">⌁</span><b>HOUSE CONTROLS</b><small>CONNECTED SERVICES</small></button>
-        <button class="tile" onclick="navigate('home')"><span class="setting-icon">⌂</span><b>BACK HOME</b><small>RETURN TO TERMINAL</small></button>
-      </div>
-    </section>
-
-    <section id="view-controls" class="view" aria-label="Device and smart home controls">
-      <div class="page-eyebrow">CONTROL DECK / DEVICE</div>
-      <h1>CONTROL <em>ROOM</em></h1>
-      <div class="section-title"><span>DEVICE SHORTCUTS</span><span class="muted micro-label">ANDROID SETTINGS</span></div>
-      <div class="control-grid">
-        <button class="control-tile" onclick="MEK.openDefault('wifi')"><span class="control-icon">⌁</span><b>WI-FI</b><small>OPEN SETTINGS ↗</small></button>
-        <button class="control-tile" onclick="MEK.openDefault('bluetooth')"><span class="control-icon">ᛒ</span><b>BLUETOOTH</b><small>OPEN SETTINGS ↗</small></button>
-        <button class="control-tile" onclick="MEK.openDefault('display')"><span class="control-icon">◉</span><b>DISPLAY</b><small>OPEN SETTINGS ↗</small></button>
-        <button class="control-tile" onclick="MEK.openDefault('battery')"><span class="control-icon">▥</span><b>BATTERY</b><small>OPEN SETTINGS ↗</small></button>
-      </div>
-      <div class="section-title"><span>HOME AUTOMATION</span><span class="muted micro-label">MEK-AI LINK</span></div>
-      <div class="tile home-connect">
-        <div class="micro-label warm">● LINK STATUS / NOT CHECKED</div>
-        <h2>THE LIGHTS ARE WAITING.</h2>
-        <p>Your Tapo controls live inside your existing MEK-AI setup. We won't show fake connected switches here.</p>
-        <button onclick="MEK.openDefault('assistant')" class="outline-action">OPEN SMART HOME PANEL ↗</button>
-      </div>
-      <div class="small-print">The Chromebook controller at 127.0.0.1 does not automatically become reachable from this phone. Controls require separate secure network integration.</div>
-    </section>
-
-    <section id="view-settings" class="view" aria-label="Launcher settings">
-      <div class="page-eyebrow">PERSONALIZE / TERMINAL</div>
-      <h1>WORKSHOP <em>SETTINGS</em></h1>
-      <div class="section-title"><span>APPEARANCE</span><span class="muted micro-label">LOCAL TO PHONE</span></div>
-      <div class="tile settings-list">
-        <label class="setting-row"><span><b>ATMOSPHERIC WALLPAPER</b><small>Keep the workshop behind the interface</small></span><input type="checkbox" id="wallpaperToggle" checked><i></i></label>
-        <label class="setting-row"><span><b>REDUCE ANIMATIONS</b><small>Use less movement around MEK-AI</small></span><input type="checkbox" id="motionToggle"><i></i></label>
-      </div>
-      <div class="section-title"><span>SCREEN GRIDS</span><span class="muted micro-label">COLUMNS × ROWS</span></div>
-      <div class="tile settings-list">
-        <button class="setting-link" onclick="openEditor('grid-home')"><span><b>HOME SCREEN GRID</b><small>How many cells on each home page</small></span><span id="homeGridSummary">4×6 ↗</span></button>
-        <button class="setting-link" onclick="openEditor('grid-apps')"><span><b>APPS SCREEN GRID</b><small>Icons per page in your app drawer</small></span><span id="appsGridSummary">5×6 ↗</span></button>
-        <button class="setting-link" onclick="openEditor('grid-folders')"><span><b>FOLDER GRID</b><small>Icons shown inside each folder</small></span><span id="foldersGridSummary">4×4 ↗</span></button>
-      </div>
-      <div class="tile layout-settings" style="margin-top:12px">
-        <button class="outline-action" onclick="enterEditMode(true)">ARRANGE WIDGETS, FOLDERS & APPS ↗</button>
-      </div>
-      <div class="section-title"><span>TERMINAL THEMES</span><span class="muted micro-label">COLOR VARIANTS</span></div>
-      <div id="themeChoices" class="theme-choices">
-        <button data-theme="overgrown" onclick="setTheme('overgrown')" class="chosen">✳ OVERGROWN</button>
-        <button data-theme="amber" onclick="setTheme('amber')">● AMBER</button>
-        <button data-theme="moss" onclick="setTheme('moss')">◐ MOSS</button>
-      </div>
-            <div class="section-title"><span>PHONE SETUP</span><span class="muted micro-label">SAFE INSTALL</span></div>
-      <div class="tile settings-list">
-        <button class="setting-link" onclick="requestMakeHome()"><span><b>MAKE MEK-AI MY HOME</b><small id="homeSettingStatus">Choose this launcher as the phone home screen</small></span><span>↗</span></button>
-        <button class="setting-link" onclick="MEK.openDefault('home')"><span><b>MANAGE HOME APPS</b><small>Switch back to One UI Home whenever you like</small></span><span>↗</span></button>
-        <button class="setting-link" onclick="MEK.openDefault('settings')"><span><b>ANDROID SETTINGS</b><small>Regular system settings remain available</small></span><span>↗</span></button>
-      </div>
-      <div class="section-title"><span>ABOUT</span><span class="muted micro-label">VERSION 0.4.0</span></div>
-      <div class="tile about-card">
-        <div class="micro-label warm">MEK-AI MOBILE / ALPHA</div>
-        <h2>AN OVERGROWN LITTLE OS.</h2>
-        <p>Created for an Android phone. Inspired by dot-matrix hardware and the mechanical Hideaway. Home, app archive, notes, local tasks, system shortcuts, and companion access are included.</p>
-        <p class="small-print">This is a custom launcher, not a replacement firmware or Samsung lock screen.</p>
-      </div>
-    </section>
-
-    <div id="editSheet" class="edit-sheet-overlay hidden" role="dialog" aria-modal="true" aria-label="Customize MEK-AI home">
-      <button class="edit-sheet-backdrop" onclick="closeEditor()" aria-label="Close customizer"></button>
-      <div class="edit-sheet-panel">
+    <div id="sheetOverlay" class="sheet-overlay hidden" role="dialog" aria-modal="true" aria-label="Customize MEK-AI Home">
+      <button class="sheet-backdrop" id="closeSheetBackdrop" aria-label="Close customizer"></button>
+      <div class="sheet-panel">
         <div class="sheet-grip"></div>
-        <div class="sheet-head"><span id="editorHeading">CUSTOMIZE HOME</span><button onclick="closeEditor()">✕</button></div>
-        <div id="editSheetBody" class="edit-sheet-body"></div>
+        <div class="sheet-head"><span id="sheetTitle">EDIT HOME</span><button id="closeSheet" aria-label="Close customization">✕</button></div>
+        <div class="sheet-body" id="sheetBody"></div>
       </div>
     </div>
 
-    <div id="pageRail" class="page-rail" aria-label="Swipeable home pages">
-      <div id="pageRailLabel" class="page-rail-label">HOME / 1</div>
-      <div id="pageRailDots" class="page-rail-dots"></div>
-      <div id="pageRailHint" class="page-rail-hint">↑ APPS</div>
-    </div>
     <div id="folderOverlay" class="folder-overlay hidden" role="dialog" aria-modal="true" aria-label="App folder">
-      <div class="folder-backdrop" onclick="closeFolder()"></div>
-      <div class="folder-panel">
-        <div class="folder-head"><input id="folderName" type="text" maxlength="35" aria-label="Folder name"/><button onclick="closeFolder()" aria-label="Close folder">✕</button></div>
-        <div id="folderPages" class="folder-pages"><div id="folderPageTrack" class="folder-page-track"></div></div>
-        <div id="folderPageDots" class="app-page-dots"></div>
-        <button id="folderAdd" class="outline-action" onclick="addAppToFolder()">＋ ADD APPLICATION</button>
+      <button class="folder-backdrop" id="closeFolderBackdrop" aria-label="Close folder"></button>
+      <div class="folder-window">
+        <div class="folder-header"><input id="folderTitle" type="text" maxlength="35" placeholder="Folder name" aria-label="Folder name"><button id="closeFolder" aria-label="Close folder">✕</button></div>
+        <div class="folder-viewport" id="folderViewport"><div class="folder-track" id="folderTrack"></div></div>
+        <div class="folder-pips" id="folderDots"></div>
+        <div class="folder-actions"><button id="folderAddApp">＋ ADD APPS</button><span>HOLD ICON TO REMOVE</span></div>
+      </div>
+    </div>
+
+    <div class="gesture-scrim hidden" id="dragGhost" aria-hidden="true"></div>
+    <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+    <div id="homeSetup" class="home-setup hidden" role="dialog" aria-modal="true" aria-label="Set MEK-AI as the Android Home">
+      <div class="home-setup-panel">
+        <span class="micro-label amber">MEK-AI / INITIALIZATION</span>
+        <h2>Make this your <em>home.</em></h2>
+        <p>MEK-AI can become your Android home launcher. Samsung One UI Home stays installed and available as a fallback.</p>
+        <button id="makeDefaultHome" class="large-action">CHOOSE MEK-AI AS HOME ↗</button>
+        <button id="dismissSetup" class="text-action">NOT NOW</button>
       </div>
     </div>
   </div>
-  <div id="homeOnboarding" class="onboard-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="onboardTitle">
-    <div class="onboard-panel">
-      <div class="micro-label warm">MEK-AI / FIRST BOOT</div>
-      <h2 id="onboardTitle">Make this your <em>home.</em></h2>
-      <p>MEK-AI is a real Android home launcher. Right now you're opening it like an app because Samsung is still your default Home.</p>
-      <p class="onboard-muted">Setting it as Home makes your phone's Home button return here. Your apps and One UI Home stay installed, and you can switch back at any time.</p>
-      <button class="primary-action" onclick="requestMakeHome()">SET MEK-AI AS HOME <span>↗</span></button>
-      <button class="onboard-secondary" onclick="dismissHomeOnboarding()">NOT YET, LET ME LOOK AROUND</button>
-    </div>
-  </div>
-    <script src="layout-core.js"></script>
-  <script src="mobile.js"></script>
-</body></html>
+
+  <script src="launcher-core.js"></script>
+  <script src="launcher-v5.js"></script>
+  <script src="launcher-v5-ui.js"></script>
+  <script src="launcher-v5-sheets.js"></script>
+  <script src="launcher-v5-gestures.js"></script>
+</body>
+</html>

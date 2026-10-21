@@ -1,79 +1,129 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const L=require('../app/src/main/assets/layout-core.js');
+const Core=require('../app/src/main/assets/launcher-core.js');
 
-test('grid columns stay within phone-safe range',()=>{
-  assert.equal(L.columns(0),3);
-  assert.equal(L.columns(9),6);
-  assert.equal(L.columns('5'),5);
-  assert.equal(L.columns('invalid'),4);
-});
-test('default desktop has widgets and live shortcuts',()=>{
-  const items=L.normalize(null);
-  assert.ok(items.length>=9);
-  assert.ok(items.some(t=>t.type==='mek'));
-  assert.ok(!items.some(t=>t.type==='shortcut'&&t.kind==='drawer'));
-});
-test('reordering preserves data but changes position',()=>{
-  const items=L.normalize(null), moved=L.move(items,items[0].id,items[3].id);
-  assert.equal(moved[3].id,items[0].id);
-  assert.equal(moved.length,items.length);
-  assert.equal(items[0].type,'clock');
-});
-test('layout spans scale to grid width',()=>{
-  assert.equal(L.span({type:'app'},6),1);
-  assert.equal(L.span({type:'clock'},3),2);
-  assert.equal(L.span({type:'mek'},6),6);
-});
-test('invalid layout entries never become HTML injections or arbitrary packages',()=>{
-  const items=L.normalize([{id:'<script>',type:'notes'},{id:'okay',type:'app',pkg:'bad package'},{id:'fine',type:'app',pkg:'com.example.good',label:'test'}]);
-  assert.equal(items.length,1);
-  assert.equal(items[0].pkg,'com.example.good');
-  assert.throws(()=>L.newTile('app',{pkg:'http://bad.example',label:'Bad'}));
-});
-test('newly added widgets and apps are valid',()=>{
-  const widget=L.newTile('battery');
-  const app=L.newTile('app',{pkg:'com.example.test',label:'Test'});
-  assert.equal(L.normalize([widget,app]).length,2);
-  assert.equal(app.label,'Test');
+test('defaults represent familiar Samsung grids and a four-slot persistent dock',()=>{
+  const state=Core.defaultState();
+  assert.equal(state.settings.homeCols,4);
+  assert.equal(state.settings.homeRows,6);
+  assert.equal(state.settings.appCols,5);
+  assert.equal(state.settings.appRows,6);
+  assert.equal(state.settings.folderCols,4);
+  assert.equal(state.settings.folderRows,4);
+  assert.equal(state.dock.length,4);
+  assert.deepEqual(state.dock.map(x=>x.kind),['phone','messages','browser','camera']);
+  assert.equal(state.pages.length,1);
 });
 
-test('physical 4x6 home grid packs tiles onto multiple nonoverlapping pages',()=>{
-  const cols=4,rows=6,pages=L.pack(L.defaultLayout,cols,rows);
-  assert.ok(pages.length>=2);
-  const items=pages.flat();
-  assert.equal(items.length,L.defaultLayout.length);
-  pages.forEach(page=>{
-    const occupied=new Set();
-    page.forEach(({col,row,w,h})=>{
-      assert.ok(col+w<=cols);
-      assert.ok(row+h<=rows);
-      for(let y=row;y<row+h;y++)for(let x=col;x<col+w;x++){
-        const key=y*cols+x;
-        assert.ok(!occupied.has(key),'no home tiles overlap');
-        occupied.add(key);
-      }
-    });
-  });
+test('rejects malformed app package and duplicate folder members',()=>{
+  assert.equal(Core.packageOk('com.example.app'),true);
+  assert.equal(Core.packageOk('http://bad'),false);
+  assert.equal(Core.cleanItem({type:'app',pkg:'<script>'}),null);
+  const folder=Core.cleanItem({id:'folder-x',type:'folder',name:'Design',
+    apps:[{pkg:'com.example.ps',label:'PS'}, {pkg:'com.example.ps',label:'Duplicate'},
+    {pkg:'broken',label:'Invalid'},{pkg:'com.example.ai',label:'Illustrator'}]},4,6);
+  assert.equal(folder.apps.length,2);
+  assert.deepEqual(folder.apps.map(x=>x.label),['PS','Illustrator']);
 });
-test('folders validate app packages and preserve their contents after saving layout',()=>{
-  const folder=L.newTile('folder',{name:'Design',apps:[
-    {pkg:'com.example.blender',label:'Blender'},
-    {pkg:'com.example.blender',label:'Duplicate'},
-    {pkg:'broken package',label:'Invalid'},
-    {pkg:'com.example.unreal',label:'Unreal'}
-  ]});
-  const normalized=L.normalize([folder]);
-  assert.equal(normalized[0].name,'Design');
-  assert.equal(normalized[0].apps.length,2);
-  assert.deepEqual(normalized[0].apps.map(a=>a.label),['Blender','Unreal']);
-  assert.equal(L.dimensions(folder,4).w,1);
-  assert.equal(L.dimensions(folder,4).h,1);
+
+test('free-cell scan never overlaps and creates a new page when grid is full',()=>{
+  const state=Core.normalize(Core.defaultState());
+  for(let i=0;i<35;i++)Core.addHome(state,
+    {id:'app-'+i,type:'app',pkg:'com.demo.app'+i,label:'App '+i},state.current);
+  assert.ok(state.pages.length>=2);
+  for(const page of state.pages){
+    for(const item of page.items){
+      assert.ok(Core.inside(item,state.settings.homeCols,state.settings.homeRows));
+      assert.equal(page.items.filter(other=>other.id!==item.id&&Core.overlap(item,other)).length,0);
+    }
+  }
 });
-test('Samsung-style independent row and column clamps',()=>{
-  assert.equal(L.rows(6),6);
-  assert.equal(L.drawerColumns(5),5);
-  assert.equal(L.folderColumns(4),4);
-  assert.equal(L.folderRows(4),4);
-  assert.equal(L.rows(99),8);
+
+test('moving app onto app creates folder with two applications',()=>{
+  const state=Core.defaultState();
+  const a=Core.addHome(state,{id:'app-a',type:'app',pkg:'com.demo.alpha',label:'Alpha'});
+  const b=Core.addHome(state,{id:'app-b',type:'app',pkg:'com.demo.beta',label:'Beta'});
+  assert.ok(a&&b);
+  assert.equal(Core.moveToHome(state,a.id,state.current,b.x,b.y),true);
+  const folder=state.pages[0].items.find(item=>item.type==='folder');
+  assert.ok(folder);
+  assert.deepEqual(folder.apps.map(x=>x.pkg),['com.demo.beta','com.demo.alpha']);
+  assert.equal(state.pages[0].items.some(x=>x.id===a.id),false);
+  assert.equal(state.pages[0].items.some(x=>x.id===b.id),false);
+});
+
+test('move icons into the dock without losing the displaced favorite',()=>{
+  const state=Core.defaultState();
+  const app=Core.addHome(state,{id:'app-a',type:'app',pkg:'com.demo.alpha',label:'Alpha'});
+  assert.equal(Core.moveToDock(state,app.id,0),true);
+  assert.equal(state.dock[0].pkg,'com.demo.alpha');
+  assert.equal(state.pages.some(p=>p.items.some(x=>x.type==='system'&&x.kind==='phone')),true);
+});
+
+test('widget resize requires free cells and supports real Android widget IDs',()=>{
+  const state=Core.defaultState();
+  const battery=state.pages[0].items.find(x=>x.kind==='battery');
+  assert.equal(Core.resize(state,battery.id,2,4),false); // Conflicts with tasks below.
+  const android=Core.addHome(state,{id:'android-01',type:'android-widget',nativeId:302,
+    label:'Third-party Clock',w:2,h:2});
+  assert.ok(android);
+  const restored=Core.normalize(state);
+  assert.equal(restored.pages.flatMap(p=>p.items).some(x=>x.type==='android-widget'&&x.nativeId===302),true);
+});
+
+test('separate grid changes preserve every item during reflow',()=>{
+  const state=Core.defaultState();
+  for(let i=0;i<11;i++)Core.addHome(state,
+    {id:'app-'+i,type:'app',pkg:'com.example.id'+i,label:'App '+i});
+  const before=state.pages.flatMap(p=>p.items).map(x=>x.id).sort();
+  state.settings.homeCols=3;state.settings.homeRows=4;
+  Core.reflow(state);
+  const after=state.pages.flatMap(p=>p.items).map(x=>x.id).sort();
+  assert.deepEqual(after,before);
+  for(const p of state.pages)for(const item of p.items)assert.ok(Core.inside(item,3,4));
+});
+
+test('home pages support reordering, chosen default and safe deletion',()=>{
+  const state=Core.defaultState();
+  const second=Core.addPage(state,state.current);
+  const third=Core.addPage(state,second.id);
+  assert.equal(state.pages.length,3);
+  assert.equal(Core.reorderPage(state,third.id,-1),true);
+  state.settings.homeDefault=second.id;
+  assert.equal(Core.deletePage(state,second.id),true);
+  assert.notEqual(state.settings.homeDefault,second.id);
+  assert.equal(state.pages.length,2);
+  assert.equal(Core.deletePage(state,state.pages[1].id),true);
+  assert.equal(Core.deletePage(state,state.pages[0].id),false);
+});
+
+test('migration retains legacy tasks, notes and installed application shortcuts',()=>{
+  const old={
+    mek_mobile_grid_v2:[{id:'one',type:'app',pkg:'com.example.clock',label:'Clock'},
+      {id:'default-apps',type:'shortcut',kind:'drawer',label:'All Apps'}],
+    mek_mobile_tasks_v1:[{text:'Buy bread',done:false}],
+    mek_mobile_note_v2:'Remember my workshop',
+    mek_mobile_theme_v2:'moss'
+  };
+  const legacy=Core.migrateLegacy(key=>old[key]===undefined?null:JSON.stringify(old[key]));
+  assert.equal(legacy.settings.theme,'moss');
+  assert.equal(legacy.notes,'Remember my workshop');
+  assert.equal(legacy.tasks.length,1);
+  assert.ok(legacy.pages[0].items.some(x=>x.pkg==='com.example.clock'));
+  assert.ok(!legacy.pages[0].items.some(x=>x.kind==='drawer'));
+});
+
+test('state normalization preserves and clamps home, app, folder and dock preferences',()=>{
+  const model=Core.defaultState();
+  Object.assign(model.settings,{homeCols:8,homeRows:3,appCols:2,appRows:12,
+    folderCols:9,folderRows:0,dockSlots:9,swipeUp:false});
+  const s=Core.normalize(model).settings;
+  assert.equal(s.homeCols,6);
+  assert.equal(s.homeRows,4);
+  assert.equal(s.appCols,4);
+  assert.equal(s.appRows,8);
+  assert.equal(s.folderCols,6);
+  assert.equal(s.folderRows,3);
+  assert.equal(s.dockSlots,5);
+  assert.equal(s.swipeUp,false);
 });

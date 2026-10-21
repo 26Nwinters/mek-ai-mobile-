@@ -1,120 +1,52 @@
-# MEK-AI Mobile v0.4.0 — swipeable home pages and Samsung-style grids
+# MEK-AI Mobile v0.5.0 — Android launcher rebuild
 
-This is a genuine Android Home launcher (not a firmware replacement), designed for the Galaxy S10+ and Android 12.
+**MEK-AI Mobile is a real Android HOME launcher, not a replacement ROM.** This experimental build targets Android 12+, including the Galaxy S10+. It uses original MEK-AI robot and overgrown workshop artwork.
 
-## Phone behavior
+## Normal phone behavior
 
-- **No permanent bottom navigation buttons.** A small page-dot indicator shows MEK-AI, your Home pages, House, and Setup.
-- **Swipe right** from the first Home page to MEK-AI, or **swipe left** for the next customizable Home page; swiping left beyond your last Home page leads to House and Setup.
-- **Swipe up from the Home screen** for the app drawer, then **swipe left or right** to switch app pages. Swipe down to close it. This uses real touch events on Android, instead of only a small edge hotspot.
-- Hold the Home screen to enable jiggle/edit mode, then add widgets, apps, folders or another home page.
-- App shortcuts added from the edit-mode picker are saved, displayed on the correct Home page, and show a confirmation.
-- **Separate grid settings:** default Home **4×6**, Apps **5×6**, and Folders **4×4**, with independent adjustable rows and columns. Widgets occupy multiple grid cells.
-- Folders can be created, renamed, filled with real installed apps and opened. Long-press an app in a folder to remove it.
-- Your existing v0.3 home tiles, tasks, wallpaper setting, and theme are migrated where possible. The old redundant “All apps” home tile is removed.
+- Swipe horizontally between **customizable Home pages**; no fixed assistant, Settings or House tabs mixed into them.
+- **Permanent favorites dock**, independent of Home pages, with 3–5 adjustable slots, folder support, and draggable apps.
+- **Swipe up** across Home to open the separate application drawer, **swipe down** to close it, swipe horizontally between app pages.
+- Android-like grid defaults: **Home 4×6**, **Apps 5×6**, **Folders 4×4**, with separate configurable rows and columns.
+- Long-press an icon to start editing; drag apps between Home, dock and folders. Long-press an installed app in the drawer to bring it onto Home.
+- Long-press a blank Home area to enter **jiggle mode**. Add apps, widgets and pages, resize widgets, manage folders, choose default page, reorder and remove pages. Dragging near a page edge switches pages or creates a new one.
+- MEK-AI companion, House Controls, and launcher Settings are regular app-drawer shortcuts and can be added wherever you prefer. The MEK-AI character is also a default large Home widget.
 
-## Installation
+## Widgets and personalization
 
-Download the v0.4.0 APK from [GitHub Actions](https://github.com/26Nwinters/mek-ai-mobile-/actions/workflows/android.yml) or the attachment in ChatGPT. This remains an alpha: test on your S10+ while keeping Samsung One UI Home available under **Settings → Apps → Choose default apps → Home app**.
+Built-in modules: MEK-AI, clock, live device battery, local checklist, notes, calendar, music shortcut, weather shortcut and house-control shortcut. These are not claims of real weather, music playback or Tapo hardware integration.
 
-**Caution:** APKs built on the GitHub-hosted debug signing key may require uninstalling the previous alpha before installing a new one. This deletes the older alpha's locally stored data. Do not uninstall One UI Home. Persistently signing future builds requires a private key stored securely, not inside this public repository.
+**Third-party Android App Widgets:** experimental native `AppWidgetHost` and Android provider picker support are included. Native widgets are positioned over the WebView grid. Compatibility depends on provider configuration and Android widget lifecycle, and still requires physical-device testing. Some widgets may not behave correctly.
 
-## Verification
+Themes: Overgrown, Amber Industrial, Moss Night. Adjustable icon sizes, icon labels, wallpaper texture, motion, dock appearance and gestures. The app drawer supports alphabetical or personalized priority ordering and folders.
 
-GitHub Actions runs the Node tests for physical grid packing, page swipes, folders, pinning apps, settings, and tab switching, then compiles the native APK. That does not substitute for touch testing on a physical Samsung device.
+## Layout storage, backup and update signing
 
----
+- Layouts, tasks and notes save locally and include a best-effort **migration from v0.4**.
+- In **Settings → Backup & Restore**, export a JSON file with Android's document picker, or copy backup text; restore from an Android document or pasted JSON.
+- **Back up BEFORE uninstalling an older development build.** The debug APK is signed using the GitHub Actions runner's temporary key unless you configure a stable key. Uninstalling the old build deletes its internal layout and tasks.
+- Optional stable signing support is built into CI: generate a standard Android debug-style keystore locally and add its base64 contents to the GitHub Actions repository secret `MEK_DEBUG_KEYSTORE_B64`. Never commit keystores/passwords to the public repository. This helps only future builds signed with the *same* key; it cannot make a new signing key compatible with an older APK.
+- Native third-party widget bindings generally **do not survive uninstall/reinstall**; they may need to be added again after restoring a layout.
 
-# MEK-AI Mobile v0.3.0 — gesture-based app archive
+## What remains experimental or external
 
-The editable overgrown industrial launcher now follows the Android/Samsung-style interaction shown in the user's October 21 screen recording.
+- Actual Samsung/Android lock screen, status bar, notification shade and operating system settings aren't replaced.
+- Connected MEK-AI voice mode, reminders, weather and Tapo hardware automation still depend on the separate existing companion/controller; the launcher isn't pretending they are connected.
+- Android widget provider compatibility, custom drawer ordering, long-press drag gestures and full daily-use stability require a real Galaxy S10+ test.
+- Importing external wallpaper/icon packs, system-level notification scheduling, and Android package uninstall UI remain future enhancements.
 
-## What changed
+## Testing and build
 
-- **Swipe up from the small handle just above the bottom dock** (or tap it) to open the installed-app drawer. You can also swipe upward from the bottom portion of the home screen.
-- **Swipe horizontally in the drawer** to move through full-screen icon pages, five columns and up to five rows per page (four rows on short screens). Dots display your current page; tap a dot to jump.
-- **Swipe down in the drawer or tap the down chevron** to return home. Android's Back navigation also returns home.
-- The Apps **navigation tab is removed**; Home, MEK-AI, Control, and Setup remain accessible.
-- The searchable drawer and home-grid **pin app** workflow continue to work. Enter edit mode → Apps → choose an installed app; it becomes a home tile.
-- App icons now load asynchronously via a worker-side Android bridge, in addition to the earlier asynchronous app enumeration. Only the current and adjacent app pages are rendered, limiting memory pressure.
+The GitHub Actions workflow runs model and simulated phone tests with Node/jsdom before compiling the Android APK. These cover page/dock independence, settings, swipes, folders, app pinning, drag-to-Home, widget picker callbacks, migration, backup and native Home behavior. A successful workflow is **not** a guarantee of bug-free touch behavior on the actual phone.
 
-## Status and installation
+Native integration: `app/src/main/java/com/mekai/mobile/MainActivity.java`
 
-**This is still an experimental launcher, not an Android ROM.** Build and UI smoke tests can pass without guaranteeing it is stable on a physical Galaxy S10+. Test app launching, horizontal page swipes, and returning Home while keeping Samsung One UI Home installed.
+Web UI and data logic:
+- `launcher-core.js` — persistent layout model with collision-safe grid placement
+- `launcher-v5.js` — lifecycle, Android bridge, local backup, native widget position sync
+- `launcher-v5-ui.js` — Home, dock, installed apps, folders, built-in widgets
+- `launcher-v5-sheets.js` — customization and settings, grid previews
+- `launcher-v5-gestures.js` — swipe, long-press, drag-and-drop
+- `launcher-v5.css` — original workshop theme
 
-Install the APK from [GitHub Actions](https://github.com/26Nwinters/mek-ai-mobile-/actions/workflows/android.yml). Android's Home app selection is under **Settings → Apps → Choose default apps → Home app**.
-
-**Development-build signing warning:** GitHub Action debug APKs are signed with ephemeral debug keys. If Android refuses to update v0.2.1, uninstall the older version, then install v0.3.0. Uninstalling clears MEK-AI's locally stored tiles, notes, tasks, and settings. Please don't remove Samsung's stock launcher.
-
----
-
-# MEK-AI Mobile // Your Overgrown Android Home
-
-**v0.2.1: editable launcher alpha, designed for the Galaxy S10+ (Android 12).**
-
-A real, non-root Android **home launcher** that keeps MEK-AI's forest-green, weathered workshop personality while providing a phone-like customizable tile grid. It replaces your **home screen**, not Android firmware, notification shade, or lock screen.
-
-## Installation
-
-1. Download the [tested v0.2.1 APK from the successful GitHub Actions build](https://github.com/26Nwinters/mek-ai-mobile-/actions/runs/39629821014), under Artifacts, or use the direct APK provided in the ChatGPT conversation.
-2. Install it on Android 12+, allowing *Install unknown apps* for your browser or file manager only when prompted.
-3. If Android reports **App not installed** when updating v0.1.1, first uninstall the previous MEK-AI development build. **Warning: this clears its saved local tasks, notes, and preferences.** The CI debug signing key is not stable between workflow runs.
-4. Choose **MEK-AI Mobile** under **Settings → Apps → Choose default apps → Home app**.
-5. **One UI Home** stays installed. You can return to it using the same Android Home app setting whenever you wish.
-
-## Rearrange your home screen
-
-- **Long-press** an empty space or any tile (~0.6 seconds): widgets enter jiggle/edit mode.
-- Tap **+ WIDGETS** to insert clock, battery, weather shortcut, MEK-AI companion, tasks, music shortcut, or workshop note.
-- Tap **APPS** to select an installed Android app to pin to the grid.
-- Tap **GRID** to change between **3 and 6 columns**, or use **Workshop Settings → Home Screen Grid**.
-- Grab the **⠿ handle** at the top-right of a tile and drag over another tile to reorder. Use **×** to remove a tile. Press **DONE** to leave edit mode.
-- Choose **Overgrown**, **Amber Industrial**, or **Moss Night** as a color theme. Toggle textured wallpaper and animations in Workshop Settings.
-
-Your layout, column count, tasks, workshop note, and theme are saved locally to the launcher.
-
-## Stability improvements in v0.2.1
-
-Previously the App Archive requested and converted every installed app icon in **one synchronous JavaScript-to-Android call**. This could block the WebView when switching tabs.
-
-Now:
-
-- Android discovers apps on a background thread.
-- The App Archive paints in small batches rather than creating every app item in one frame.
-- App icons are fetched lazily when visible and cached in memory.
-- Navigation does not repeatedly rescan installed apps when switching screens.
-- The five-tab launcher interface, duplicate live widgets, and layout operations are covered by automated tests.
-
-**These changes passed simulated UI smoke tests and the GitHub Android APK build. Actual stability on your Galaxy S10+ still needs real-device verification.**
-
-## What's functional
-
-- Android Home role and native installed-app launching.
-- Five pages: customizable Home, searchable App Archive, MEK-AI Companion, Control Room, and Workshop Settings.
-- Live dot-matrix clock, actual Android battery status, local tasks, personal note.
-- Persisted customizable home grid, themes, reduce-motion setting.
-- Android settings shortcuts and access to existing MEK-AI web companion.
-
-## Not yet implemented
-
-- Third-party **Android App Widgets** (the + Widgets chooser currently adds the launcher’s **built-in modules**).
-- Multi-home-screen swiping, custom Samsung lock screen/notification shade, or replacing Android system settings.
-- Integrated on-device voice wake-word, live weather API, Android alarm notifications, or direct Tapo device control.
-- App data migration between CI debug-signed APKs.
-
-The Tapo controller in the original MEK-AI app runs on a separate machine. This mobile launcher does not claim to control lights unless a secure reachable controller connection is configured.
-
-## Development
-
-Tech: Java activity / Android WebView + local HTML/CSS/JS, Android 12+, AGP 8.7.3, Java 17, Gradle 8.9.
-
-- `app/src/main/java/com/mekai/mobile/MainActivity.java` — Home role, native shortcuts, background app discovery, lazy icon bridge.
-- `app/src/main/assets/index.html` — five launcher screens, editor overlay, app picker.
-- `app/src/main/assets/mobile.css` — responsive grid, editing, jiggle animation, industrial theme.
-- `app/src/main/assets/mobile.js` — app lifecycle, editing gestures, app list, tasks, saved preferences.
-- `app/src/main/assets/layout-core.js` — validated tile model, reordering, column/span rules.
-- `tests/` — unit tests plus jsdom smoke tests of tabs, editing and app pinning.
-- `tools/prepare_art.py` — optimizes the approved original MEK-AI artwork into WebP at build time.
-- `.github/workflows/android.yml` — remote tests, Android compilation and APK artifact.
-
-From a dev environment: `npm install && npm test`. GitHub Actions runs those checks and compiles the APK, so an Android Studio install on the Chromebook isn't necessary.
+Always keep **Samsung One UI Home installed** as a fallback. Change defaults at **Settings → Apps → Choose default apps → Home app**.
