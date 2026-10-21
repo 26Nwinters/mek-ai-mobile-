@@ -12,6 +12,20 @@ async function phone(seed=null){
   w.scrollTo=()=>{};
   w.HTMLElement.prototype.scrollTo=function(arg){this.scrollLeft=typeof arg==='object'?arg.left||0:0;};
   w.HTMLCanvasElement.prototype.getContext=()=>({beginPath(){},arc(){},fill(){},clearRect(){}});
+  // jsdom never performs CSS layout. Provide actual phone-sized geometry
+  // ONLY for native widget cells so placement bridge tests can exercise the
+  // SHOW/rect protocol instead of dropping every rect as zero width/height.
+  const nativeRect=w.HTMLElement.prototype.getBoundingClientRect;
+  w.HTMLElement.prototype.getBoundingClientRect=function(){
+    if(this.classList?.contains('grid-cell')&&this.dataset.type==='android-widget'){
+      const cols=Number(this.style.getPropertyValue('--w'))||1;
+      const rows=Number(this.style.getPropertyValue('--h'))||1;
+      const left=32,top=208,width=cols*78,height=rows*82;
+      return {left,top,x:left,y:top,width,height,
+        right:left+width,bottom:top+height,toJSON(){return this;}};
+    }
+    return nativeRect.call(this);
+  };
   const calls={launch:[],system:[],widgets:[],widgetInventories:[],widgetLayers:[],widgetTimeline:[],exports:[],imports:0,pickWidget:0,info:[],iconBatches:[]};
   const apps=Array.from({length:150},(_,i)=>({name:'Application '+String(i).padStart(3,'0'),pkg:'com.example.app'+i}));
   w.MEK={
