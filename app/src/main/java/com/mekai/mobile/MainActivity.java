@@ -413,7 +413,7 @@ public class MainActivity extends Activity {
                     .getInstalledProvidersForPackage(component.getPackageName(),null);
                 for(AppWidgetProviderInfo info:providers)if(component.equals(info.provider)){
                     Drawable preview=info.loadPreviewImage(this,getResources().getDisplayMetrics().densityDpi);
-                    if(preview!=null)image=iconData(preview);
+                    if(preview!=null)image=new PhoneBridge().iconData(preview);
                     break;
                 }
             }catch(Exception e){Log.w(TAG,"Widget preview unavailable",e);}
