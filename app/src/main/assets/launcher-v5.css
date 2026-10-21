@@ -180,7 +180,7 @@ body.editing .dock-slot.drop-candidate{outline:3px solid var(--amber)}
 .edit-actions{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;margin-top:9px}
 .edit-actions button{min-width:0;padding:5px 1px;display:flex;flex-direction:column;align-items:center;gap:5px;font:8px/1.1 'Consolas',monospace;color:var(--light);background:rgba(52,65,46,.64);border:1px solid rgba(221,174,99,.25);border-radius:7px}
 .edit-actions button span{font-size:17px;color:var(--amber)}
-body.editing #screen-home{padding-top:90px}
+body.editing #screen-home{padding-top:112px}
 body.editing .subtle-edit{visibility:hidden}
 body.editing .home-viewport{overflow:hidden}
 .sheet-overlay,.folder-overlay,.home-setup{position:fixed;inset:0;z-index:100;display:flex;align-items:flex-end;justify-content:center}

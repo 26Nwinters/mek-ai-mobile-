@@ -5,9 +5,10 @@ const path=require('node:path');
 const {JSDOM}=require('jsdom');
 const assets=path.resolve(__dirname,'../app/src/main/assets');
 const read=name=>fs.readFileSync(path.join(assets,name),'utf8');
-async function phone(){
+async function phone(seed=null){
   const dom=new JSDOM(read('index.html'),{url:'https://mek.invalid/',runScripts:'outside-only',pretendToBeVisual:true});
   const w=dom.window;
+  if(seed)w.localStorage.setItem('mek_launcher_v5',JSON.stringify(seed));
   w.scrollTo=()=>{};
   w.HTMLElement.prototype.scrollTo=function(arg){this.scrollLeft=typeof arg==='object'?arg.left||0:0;};
   w.HTMLCanvasElement.prototype.getContext=()=>({beginPath(){},arc(){},fill(){},clearRect(){}});
@@ -236,5 +237,16 @@ test('search filters installed app pages and custom theme options remain usable'
   const amber=Array.from(d.querySelectorAll('.option-button')).find(x=>x.textContent.includes('AMBER INDUSTRIAL'));
   amber.click();
   assert.equal(d.body.classList.contains('theme-amber'),true);
+  dom.window.close();
+});
+
+test('a fresh Android launcher process restores the chosen default Home page',async()=>{
+  const C=require('../app/src/main/assets/launcher-core.js');
+  const seed=C.defaultState();
+  const second=C.addPage(seed,seed.current);
+  seed.settings.homeDefault=second.id;
+  seed.current=seed.pages[0].id; // Previously viewed page differs from default.
+  const {dom,M}=await phone(seed);
+  assert.equal(M.model.current,second.id);
   dom.window.close();
 });

@@ -1,4 +1,4 @@
-# MEK-AI Mobile v0.5.1 — Android launcher rebuild with verified robot widget layout
+# MEK-AI Mobile v0.5.2 — Android launcher rebuild and default Home restoration
 
 **MEK-AI Mobile is a real Android HOME launcher, not a replacement ROM.** This experimental build targets Android 12+, including the Galaxy S10+. It uses original MEK-AI robot and overgrown workshop artwork.
 

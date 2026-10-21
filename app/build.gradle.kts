@@ -7,8 +7,8 @@ android {
         applicationId = "com.mekai.mobile"
         minSdk = 31
         targetSdk = 32
-        versionCode = 8
-        versionName = "0.5.1"
+        versionCode = 9
+        versionName = "0.5.2"
     }
     buildTypes { release { isMinifyEnabled = false } }
     compileOptions {

@@ -417,6 +417,11 @@ const Mek={
   },
   backupResult(message){this.toast(message==='saved'?'BACKUP FILE SAVED':'BACKUP CANCELLED OR FAILED');},
   install(){
+    // New Home launches start on the user's chosen default desktop, not
+    // whichever page was last saved before Android destroyed the Activity.
+    if(Core.pageById(this.model,this.model.settings.homeDefault)){
+      this.model.current=this.model.settings.homeDefault;
+    }
     if(typeof IntersectionObserver==='function'){
       this.iconObserver=new IntersectionObserver(entries=>{
         let any=false;
