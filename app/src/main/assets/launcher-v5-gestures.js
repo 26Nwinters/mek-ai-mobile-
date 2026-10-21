@@ -92,7 +92,8 @@ function beginDrag(p,x,y){
   // toward Home. Dropping on another library app creates a folder; dropping
   // between icons changes just this icon's ordering.
   if(source.loc==='folder'){
-    M.closeFolder();M.setView('home');M.enterEdit();
+    // Keep the folder open: dragging within it changes only that app's order.
+    // Moving out of the folder can still place it on Home.
   }else if(source.loc!=='drawer'&&!M.edit)M.enterEdit();
   const ghost=$('dragGhost');
   ghost.textContent='';
@@ -143,6 +144,10 @@ function move(x,y,event){
     M.setView('home');M.enterEdit();
     M.gestureSuppressUntil=Date.now()+950;
   }
+  if(M.drag.source.loc==='folder'&&M.activeFolder&&y<95){
+    M.closeFolder();M.setView('home');M.enterEdit();
+    M.gestureSuppressUntil=Date.now()+950;
+  }
   highlightTarget(x,y);
   maybeSwitchPage(x);
 }
@@ -174,7 +179,7 @@ function highlightTarget(x,y){
   document.querySelectorAll('.drop-candidate').forEach(n=>n.classList.remove('drop-candidate'));
   const el=document.elementFromPoint?.(x,y);
   const target=el&&el.closest('[data-loc]');
-  if(target&&['home','dock','drawer'].includes(target.dataset.loc)){
+  if(target&&['home','dock','drawer','folder'].includes(target.dataset.loc)){
     target.classList.add('drop-candidate');
     M.drag.target=target;
   }else M.drag.target=null;
@@ -242,7 +247,11 @@ function finalizeDrag(x,y){
   const dragging=M.drag;if(!dragging)return;
   const {source,item}=dragging;
   let completed=false;
-  if(source.loc==='drawer'&&M.view==='drawer'){
+  if(source.loc==='folder'&&M.activeFolder){
+    const target=dragging.target||document.elementFromPoint?.(x,y)?.closest?.('[data-loc="folder"]');
+    completed=!!M.moveFolderApp?.(source.folderId,item.pkg,source.folderId,
+      target?.dataset.loc==='folder'?target.dataset.pkg:null);
+  }else if(source.loc==='drawer'&&M.view==='drawer'){
     // Drag an individual app within the library. A drop on another app
     // creates a folder; a drop elsewhere moves only this app's position.
     const target=dragging.target||document.elementFromPoint?.(x,y)?.closest?.('[data-loc="drawer"]');
@@ -349,7 +358,11 @@ function finish(x,y){
     if(p.route==='home'&&!M.edit&&dy<0&&M.model.settings.swipeUp!==false){
       M.setView('drawer');M.gestureSuppressUntil=Date.now()+430;
     }else if(p.route==='drawer'&&dy>0&&M.model.settings.swipeDown!==false){
-      M.setView('home');M.gestureSuppressUntil=Date.now()+430;
+      const scroller=$('drawerPages');
+      const vertical=M.model.settings.appLayout==='vertical';
+      if(!vertical||((scroller?.scrollTop||0)<=3&&dy>115)){
+        M.setView('home');M.gestureSuppressUntil=Date.now()+430;
+      }
     }
   }
 }

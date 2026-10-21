@@ -1,73 +1,70 @@
-# MEK-AI Mobile v0.5.4
+# MEK-AI Mobile v0.6.0 — One UI-inspired launcher preview
 
-An experimental Android 12+ **Home launcher**, built around the original MEK-AI character and the overgrown industrial workshop aesthetic. This is not replacement Android firmware.
+MEK-AI Mobile is a custom Android Home launcher built around the original MEK-AI robot and overgrown industrial workshop aesthetic. The repository includes self-contained approved artwork.
 
-## Launcher capabilities
+**Status: Integrated release candidate.** The Android APK is built and tested on CI; actual Galaxy S10+ performance and provider-specific native widgets must be checked on a real device before calling this stable. This is not a replacement Android operating system.
 
-- Swipe between fully customizable Home pages with a persistent five-app dock.
-- Swipe up for the 5×6 horizontal app drawer, swipe down to close it.
-- Organize installed apps into drawer folders, select several at once, and move icons individually.
-- Home grid defaults to 4×6. Folder grid defaults to 4×4. Each is independently adjustable.
-- Hold and drag icons between pages and into the dock. Hold without moving for actions.
-- Add, reposition, and freely scale MEK-AI widgets and experimental native third-party Android widgets.
-- MEK-AI character and companion, smart-home link, clock, battery, notes and task widgets.
-- Customize themes, icons, wallpaper, labels and dock appearance.
-- Back up and restore the JSON Home layout from launcher settings.
+## Core Galaxy-style launcher
 
-## v0.5.4: Lifecycle, build, and security hardening
+- Independent horizontal Home pages, default Home selection, edit mode, wallpaper and a configurable five-slot dock.
+- Home layout lock to prevent accidental rearranging; persistent settings and JSON backup/restore.
+- Separate 5×6 app drawer with search, manual/custom order, horizontal pages or optional vertical list.
+- Folder creation in Home and the app library, including names, colors, folders in dock, multi-select, and moving individual apps between folders.
+- Stationary long-press for actions versus hold-and-drag for individual icons, folder creation, dock rearrangement and edge page changes.
+- Grids are configured independently: Home 4×6, Apps 5×6, Folders 4×4 by default. Native applications are launched by package name.
 
-The previous build had several infrastructure defects. This release addresses them:
+## Widgets
 
-1. **Native AppWidgetHost cleanup:** The launcher now sends Android the complete set of widget IDs present across *all* Home pages. When a widget is removed, the host removes its `AppWidgetHostView` and calls `deleteAppWidgetId` after a 20-second undo grace window. Inventory reconciliation also catches orphaned IDs after a launcher restart. Widgets on other pages are hidden, not deleted.
-2. **Widget permission handling:** When a chosen provider is not yet bound, MEK-AI calls `bindAppWidgetIdIfAllowed` and falls back to system `ACTION_APPWIDGET_BIND` consent. Configurable providers use Android's host configuration flow. Cancelling the picker, consent screen or configuration releases the provisional ID.
-3. **Self-contained original artwork:** Both approved files, `app/src/main/assets/mek.webp` and `workshop.webp`, are committed to this repository. `tools/prepare_art.py` verifies the local files only. Building no longer reads the separate MEK-AI repository, needs Pillow, or depends on internet-hosted artwork.
-4. **Synchronized versions:** Gradle, `package.json`, CI artifact names and this README agree on v0.5.4; `tools/check_release.py` rejects drift.
-5. **WebView filesystem hardening:** Explicitly disables filesystem access, content provider access, universal file access, mixed HTTP content and external navigation. Only packaged `file:///android_asset/` resources load. **The existing origin is intentionally retained** so upgrading will not silently discard layouts stored by older MEK-AI builds. Android's own documentation confirms that `setAllowFileAccess(false)` does not block special packaged `android_asset` resources. A future transition to `WebViewAssetLoader` requires an explicit, tested storage migration.
-6. **Play target API:** Upgraded Gradle/Android tooling to compile and target **Android 16 / API 36**, as required for new Google Play phone-app submissions from August 31, 2026. This does **not** mean Play Store approval or Android 16 device compatibility has been validated. The Activity includes modern system-bar inset handling and predictive-back callback handling.
-7. **Signing honesty:** CI labels whether an APK was signed with a persistent key or a one-time key. A missing `MEK_DEBUG_KEYSTORE_B64` secret generates a **TEMPORARY-KEY-test-only** artifact, explicitly not an install-in-place upgrade. It must not be marketed as one.
+- Galaxy-style picker groups Android widget providers by application. Shows provider names, preliminary size labels and asynchronously loaded preview imagery where supported.
+- The native AppWidgetHost binds to real Android widget providers; system permission and provider configuration dialogs are supported.
+- Native widget sizing respects declared min/max limits and resize directions. The host calls `updateAppWidgetSize(Bundle,List<SizeF>)` after a size change so provider content can respond instead of being stretched.
+- Native widget views are hosted over the WebView Home grid, hidden on non-current pages, and freed after deletion with a short undo grace window. Stored IDs on all pages are reconciled when the launcher starts.
+- Built-in widgets include MEK-AI, dot-matrix or minimal clock, battery, local tasks, notes, and shortcuts for weather, calendar, music and house controls.
+- MEK-AI built-in widgets have independent accent, opacity and expression settings. You can stack up to ten compatible **built-in widgets** in one grid position, then swipe within that stack, reorder children or remove individual ones.
+- Provider-driven third-party widget stacking is **not complete**. Native widgets render as individual interactive Android views; a WebView overlay alone cannot reliably intercept their swipes without a dedicated native stack host.
 
-### Configure persistent signing for future development APKs
+## Optimization and native security
 
-GitHub Actions hosted runners do not retain `~/.android/debug.keystore` between runs. One private, persistent keystore is needed for future in-place updates.
+- Only the current Home page and adjacent pages are mounted, reducing HTML canvases, app icon requests and expensive DOM updates on large desktops.
+- Installed app icons are processed off the Android UI thread, batched, cached and prioritized by visible page.
+- Back, Home, system insets, app-install changes and Android package visibility are handled in native Android code.
+- WebView file/content access is restricted, and remote navigation blocked while preserving the original packaged-asset storage origin to avoid losing older launcher layouts.
+- Android target/compile SDK are 36 (Android 16); minimum SDK 31 (Android 12).
+- Assets are vendored inside the launcher repo; there are no build-time downloads from the separate MEK-AI project.
+- Versions are synchronized across Gradle, package.json, README and GitHub Actions, and checked in CI.
 
-Generate it **on a trusted computer you control** (requires Java/JDK installed):
+## Building and testing
 
-```bash
-mkdir -p ~/.android
-keytool -genkeypair \
-  -keystore ~/.android/mek-ai-debug.keystore \
-  -alias androiddebugkey \
-  -keyalg RSA -keysize 3072 -validity 10000 \
-  -storepass android -keypass android \
-  -dname "CN=MEK-AI Development,O=MarrowVeil Studios,C=US"
-base64 -w 0 ~/.android/mek-ai-debug.keystore > ~/.android/mek-ai-debug.keystore.b64
-```
-
-Then open the repository's **Settings → Secrets and variables → Actions → New repository secret**. Create `MEK_DEBUG_KEYSTORE_B64` and paste the complete base64 text from the `.b64` file into the **GitHub secret field**, never into chat, an issue or a commit. Keep the original binary keystore backed up securely. CI will restore it as the standard Android debug keystore; the workflow validates it before building.
-
-**Important:** Setting a *new* stable key cannot make it match old debug APKs already signed with temporary keys. You may need to uninstall the old build **once**, then every future APK built with this same key can upgrade it in-place as long as package ID and signatures match. Export your existing layout before that uninstall. These development keys are not production Play Store keys. For public Play releases, use Play App Signing with a separate protected release signing key.
-
-### Source and running tests
+From a checkout with JDK 17, Android SDK Platform 36, Gradle 8.13 and Node.js 22:
 
 ```bash
 npm install --no-package-lock --ignore-scripts
 npm test
 python3 tools/prepare_art.py
 python3 tools/check_release.py
-gradle :app:assembleDebug
+gradle --no-daemon :app:assembleDebug
 ```
 
-Requires Gradle 8.13, JDK 17 and Android SDK platform 36 for Android compilation. GitHub Actions provisions these and runs the entire test/build workflow.
+CI runs all validation steps and produces an APK artifact. Every stage of this integrated build is checked on an isolated development branch before merging.
 
-Native integration: `app/src/main/java/com/mekai/mobile/MainActivity.java`. Home state and native-widget inventory: `app/src/main/assets/launcher-v5.js`; grid operations: `launcher-core.js`; UI: `launcher-v5-ui.js`.
+### IMPORTANT: Android signing and in-place updates
 
-### Important limitations
+A GitHub Actions runner generates a fresh debug signing key each time unless you provide the repository secret `MEK_DEBUG_KEYSTORE_B64`. Without that key, artifacts are explicitly marked **TEMPORARY-KEY-test-only** and cannot install over an older release with another signature. Back up the layout in launcher settings before uninstalling an earlier build.
 
-This is an alpha Android launcher. Third-party widget providers, gestures and performance still require on-device testing, especially on Android 15/16. Widget bindings use the Android system and cannot generally be transferred to a new installation by restoring a JSON backup; widgets may need to be added again. Voice activation, hardware lighting control, weather and music integration remain separate from this launcher. Keep Samsung One UI Home installed as a fallback. The user can switch Home apps through Android Settings.
+To configure future stable development updates:
+1. On a computer you control, create and back up a Java keystore with alias `androiddebugkey`, keystore password `android`, key password `android`, and an RSA key.
+2. Base64-encode the keystore locally.
+3. Add the encoded value in the GitHub repository's **Settings → Secrets and variables → Actions** as the secret `MEK_DEBUG_KEYSTORE_B64`. Never paste a private key in chat or commit it to Git.
+4. Once the same keystore signs all future builds, in-place updates work. You cannot make this new key match an old APK signed with another key.
 
-## Policies and reference links
+A production Play Store release requires separately secured production signing and policy review.
 
-- [Android AppWidgetHost](https://developer.android.com/reference/android/appwidget/AppWidgetHost)
-- [Android AppWidgetManager binding](https://developer.android.com/reference/android/appwidget/AppWidgetManager)
-- [Android WebSettings file access](https://developer.android.com/reference/android/webkit/WebSettings)
-- [Google Play API target policy](https://support.google.com/googleplay/android-developer/answer/11926878)
+## Remaining real-device validation
+
+The user's **Galaxy S10+ with Android 12** is required to confirm animation smoothness, icon timing, nested touch interactions and third-party widget/provider-specific behavior. CI and browser tests cannot guarantee identical Samsung One UI behavior. External weather, smart-home controls and AI services need the separate existing MEK-AI companion/controller connection; no fake live data is displayed.
+
+Keep Samsung One UI Home installed as an emergency/default Home fallback.
+
+## Release notes and QA record
+
+See `docs/INTEGRATION-QA.md` for stage test outcomes and outstanding integration limitations.

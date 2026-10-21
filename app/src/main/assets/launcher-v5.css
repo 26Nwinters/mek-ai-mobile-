@@ -372,3 +372,7 @@ body:not(.reduce-motion) .widget-robot[data-mood="idle"]>img{animation:mek-ambie
 .provider-widget-description{display:flex;flex-direction:column;gap:6px;min-width:0}
 .provider-widget-description strong{font:12px 'Consolas',monospace;color:#ede0ca}
 .provider-widget-description small{font:9px/1.4 'Consolas',monospace;color:var(--muted)}
+
+.clock-minimal-time{display:none;font:normal clamp(19px,7vw,38px)/1 'Consolas',monospace;color:#efc088;padding:6px 12px}
+.widget-clock[data-clock-style="minimal"] .clock-minimal-time{display:block}
+body.reduce-motion .widget-robot>img{animation:none!important}

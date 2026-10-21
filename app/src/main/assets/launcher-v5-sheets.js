@@ -207,6 +207,15 @@ M.renderSheet=function(){
       this.mutate(model=>{model.settings.labels=checked;});});
     checkbox(host,'WORKSHOP WALLPAPER','Show the sunlit industrial hideaway',settings.wallpaper,checked=>{
       this.mutate(model=>{model.settings.wallpaper=checked;});});
+    host.append(E('div','picker-section-label','WALLPAPER STYLE'));
+    opt(host,'SUNKISSED WORKSHOP','Overgrown industrial workshop artwork.',()=>{
+      this.mutate(model=>{model.wallpaperChoice='workshop';model.settings.wallpaper=true;});
+      this.renderSheet();
+    },this.model.wallpaperChoice==='workshop');
+    opt(host,'SOLID TERMINAL','A simple wallpaper matched to your chosen theme.',()=>{
+      this.mutate(model=>{model.wallpaperChoice='solid';model.settings.wallpaper=false;});
+      this.renderSheet();
+    },this.model.wallpaperChoice==='solid');
     checkbox(host,'ANIMATIONS','Enable page motion and icon jiggle',settings.motion,checked=>{
       this.mutate(model=>{model.settings.motion=checked;});});
     checkbox(host,'LOCK HOME LAYOUT','Prevent accidental dragging or editing',settings.layoutLocked===true,checked=>{

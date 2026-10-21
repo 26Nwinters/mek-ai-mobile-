@@ -50,7 +50,13 @@ const Mek={
   mutate(action){
     const before=JSON.stringify(this.model);
     let result;
-    try{result=action(this.model);}catch(e){console.warn('Layout action failed',e);this.toast('COULD NOT CHANGE LAYOUT');return false;}
+    try{result=action(this.model);}
+    catch(e){
+      console.warn('Layout action failed',e);
+      // A failed operation must never persist partial desktop changes.
+      this.model=Core.normalize(JSON.parse(before));
+      this.toast('COULD NOT CHANGE LAYOUT');return false;
+    }
     const after=JSON.stringify(this.model);
     if(before!==after){
       this.history.push(before);
@@ -573,6 +579,7 @@ const Mek={
       if(!folder)return;
       this.mutate(()=>{folder.name=e.target.value.trim().slice(0,35)||'Folder';});
     });
+    $('folderAppearance').onclick=()=>this.openSheet('folder-color');
     $('folderAddApp').onclick=()=>{
       if(!this.activeFolder)return;
       this.picking={type:'folder',folderId:this.activeFolder};

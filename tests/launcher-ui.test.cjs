@@ -40,7 +40,7 @@ async function phone(seed=null){
     syncWidgetInventory:data=>calls.widgetInventories.push(JSON.parse(data))
   };
   for(const name of ['launcher-core.js','launcher-v5.js','launcher-v5-ui.js',
-    'launcher-v5-sheets.js','launcher-v5-organizer.js','launcher-v6-widgets.js','launcher-v6-companion.js','launcher-v5-gestures.js'])w.eval(read(name));
+    'launcher-v5-sheets.js','launcher-v5-organizer.js','launcher-v6-widgets.js','launcher-v6-companion.js','launcher-v6-folders.js','launcher-v5-gestures.js'])w.eval(read(name));
   await new Promise(resolve=>setTimeout(resolve,45));
   if(!w.document.querySelector('.home-page'))w.Mek.install();
   return {dom,w,d:w.document,M:w.Mek,calls};
@@ -535,5 +535,94 @@ test('stack management can remove one child and return to ordinary widget',async
  assert.equal(d.querySelectorAll('.page-manager-item').length,2);
  M.mutate(model=>M.Core.removeStackChild(model,robot.id,1));
  assert.equal(M.Core.locate(M.model,robot.id).item.type,'widget');
+ dom.window.close();
+});
+
+test('Home page virtualization retains 32 pages but renders only adjacent tiles',async()=>{
+ const {dom,M,d}=await phone();
+ M.mutate(model=>{
+   for(let i=0;i<12;i++){
+     const page=M.Core.addPage(model,model.pages[model.pages.length-1].id);
+     M.Core.addHome(model,{id:'test-app-'+i,type:'app',pkg:'com.test.page'+i,label:'Page '+i},page.id);
+   }
+ });
+ const pages=M.model.pages;
+ assert.ok(pages.length>=13);
+ assert.equal(d.querySelectorAll('.home-page').length,pages.length);
+ assert.ok(d.querySelectorAll('.home-page .grid-cell').length<15,
+   'far away Home pages must be virtualized');
+ M.goPage(pages[8].id);
+ assert.ok(d.querySelector('.home-page[data-page="'+pages[8].id+'"] .grid-cell'));
+ assert.equal(d.querySelector('.home-page[data-page="'+pages[0].id+'"] .grid-cell'),null);
+ dom.window.close();
+});
+test('folder apps can be reordered and moved to another folder without duplicates',async()=>{
+ const {dom,M}=await phone();
+ const f1=M.Core.cleanItem({type:'folder',id:'folder-first',name:'Work',apps:[
+   {pkg:'com.example.app1',label:'App1'},{pkg:'com.example.app2',label:'App2'}]},1,1,true);
+ const f2=M.Core.cleanItem({type:'folder',id:'folder-next',name:'Games',apps:[
+   {pkg:'com.example.app3',label:'App3'}]},1,1,true);
+ M.mutate(model=>{model.drawerFolders.push(f1,f2);});
+ assert.equal(M.moveFolderApp(f1.id,'com.example.app2',f1.id,'com.example.app1'),true);
+ assert.deepEqual(Array.from(M.findFolder(f1.id).apps,a=>a.pkg),['com.example.app2','com.example.app1']);
+ assert.equal(M.moveFolderApp(f1.id,'com.example.app2',f2.id),true);
+ assert.equal(M.findFolder(f1.id).apps.length,1);
+ assert.deepEqual(Array.from(M.findFolder(f2.id).apps,a=>a.pkg),['com.example.app3','com.example.app2']);
+ dom.window.close();
+});
+test('Home layout lock prevents edit mode while preserving Home and drawer navigation',async()=>{
+ const {dom,M,d}=await phone();
+ M.mutate(model=>{model.settings.layoutLocked=true;});
+ M.enterEdit();
+ assert.equal(M.edit,false);
+ M.setView('drawer');assert.equal(M.view,'drawer');
+ M.setView('home');assert.equal(M.view,'home');
+ dom.window.close();
+});
+
+test('swiping a widget stack switches its active content without paging Home',async()=>{
+ const {dom,M,w,d}=await phone();
+ const clock=M.model.pages[0].items.find(x=>x.kind==='clock');
+ M.mutate(model=>M.Core.addToStack(model,clock.id,{type:'widget',kind:'notes',x:0,y:0,w:2,h:2}));
+ const page=M.model.current;
+ const tile=d.querySelector('.grid-cell[data-uid="'+clock.id+'"]');
+ assert.ok(tile);
+ touch(w,tile,'touchstart',310,320);
+ touch(w,tile,'touchend',90,321);
+ assert.equal(M.model.current,page);
+ assert.equal(M.Core.locate(M.model,clock.id).item.active,1);
+ dom.window.close();
+});
+test('a failed multi-step mutation restores all previous Home state',async()=>{
+ const {dom,M}=await phone();
+ const previous=JSON.stringify(M.model);
+ const ok=M.mutate(model=>{model.pages[0].items.length=0;throw Error('Injected layout failure')});
+ assert.equal(ok,false);
+ assert.equal(JSON.stringify(M.model),previous);
+ dom.window.close();
+});
+test('wallpaper settings switch between original artwork and minimal terminal',async()=>{
+ const {dom,M,d}=await phone();
+ M.setView('settings');
+ M.openSheet('appearance');
+ const option=Array.from(d.querySelectorAll('.option-button')).find(x=>x.textContent.includes('SOLID TERMINAL'));
+ assert.ok(option);
+ option.click();
+ assert.equal(M.model.wallpaperChoice,'solid');
+ assert.equal(d.body.classList.contains('solid-wallpaper'),true);
+ dom.window.close();
+});
+test('default Home across many pages does not render hidden widget tiles',async()=>{
+ const {dom,M,d}=await phone();
+ M.mutate(model=>{
+   for(let i=0;i<20;i++){
+     const p=M.Core.addPage(model,model.pages[model.pages.length-1].id);
+     M.Core.addHome(model,{id:'large-'+i,type:'widget',kind:'clock',x:0,y:0,w:2,h:2},p.id);
+   }
+ });
+ assert.equal(d.querySelectorAll('.home-page').length,M.model.pages.length);
+ assert.ok(d.querySelectorAll('.clock-canvas').length<=3);
+ M.goPage(M.model.pages[18].id);
+ assert.ok(d.querySelectorAll('.clock-canvas').length<=3);
  dom.window.close();
 });

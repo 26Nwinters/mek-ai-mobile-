@@ -152,33 +152,52 @@ M.cellDom=function(item,page){
   }
   return cell;
 };
+/* Keep the active Home page and its immediate neighbors mounted.
+   Ten Home pages no longer mean ten times the widget DOM, canvas work,
+   app icon requests and synchronous layout computations on every edit. */
+M.populateHomePage=function(surface,page,index){
+  surface.replaceChildren();
+  for(const item of page.items)surface.append(this.cellDom(item,page));
+  if(!page.items.length){
+    const empty=document.createElement('button');empty.className='home-page-empty';
+    empty.innerHTML='<strong>YOUR SPACE.</strong><span>HOLD TO ADD APPS OR WIDGETS</span>';
+    empty.onclick=()=>{this.enterEdit();this.openSheet('apps-picker');};
+    surface.append(empty);
+  }
+  surface.dataset.mounted='true';
+};
+M.hydrateHomePages=function(){
+  const pages=this.model.pages;
+  const current=Math.max(0,pages.findIndex(p=>p.id===this.model.current));
+  for(const [index,page] of pages.entries()){
+    const surface=$('homeTrack').children[index];if(!surface)continue;
+    const shouldMount=Math.abs(current-index)<=1;
+    if(shouldMount&&surface.dataset.mounted!=='true')
+      this.populateHomePage(surface,page,index);
+    else if(!shouldMount&&surface.dataset.mounted==='true'){
+      surface.replaceChildren();surface.dataset.mounted='false';
+    }
+  }
+  this.refreshClock();this.refreshBattery();this.scheduleIconDrain();
+};
 M.renderHome=function(){
   const track=$('homeTrack');if(!track)return;
   const pages=this.model.pages;
-  track.textContent='';
-  for(const page of pages){
+  track.replaceChildren();
+  for(const [index,page] of pages.entries()){
     const surface=document.createElement('div');surface.className='home-page';
     surface.dataset.page=page.id;
     surface.style.setProperty('--home-cols',this.model.settings.homeCols);
     surface.style.setProperty('--home-rows',this.model.settings.homeRows);
-    surface.setAttribute('aria-label','Home page '+(pages.indexOf(page)+1));
-    for(const item of page.items)surface.append(this.cellDom(item,page));
-    if(!page.items.length){
-      const empty=document.createElement('button');empty.className='home-page-empty';
-      empty.innerHTML='<strong>YOUR SPACE.</strong><span>HOLD TO ADD APPS OR WIDGETS</span>';
-      empty.onclick=()=>{this.enterEdit();this.openSheet('apps-picker');};
-      surface.append(empty);
-    }
+    surface.setAttribute('aria-label','Home page '+(index+1));
     track.append(surface);
   }
   const index=Math.max(0,pages.findIndex(p=>p.id===this.model.current));
   track.style.transition='none';
   track.style.transform='translate3d(-'+(index*100)+'%,0,0)';
+  this.hydrateHomePages();
   requestAnimationFrame(()=>{track.style.transition='';});
-  this.refreshClock();this.refreshBattery();
-  this.renderPageDots();
-  this.scheduleWidgetSync();
-  this.scheduleIconDrain();
+  this.renderPageDots();this.scheduleWidgetSync();this.scheduleIconDrain();
 };
 M.renderPageDots=function(){
   const host=$('homePageDots');if(!host)return;host.textContent='';

@@ -77,6 +77,10 @@ M.widgetDom=function(item){
   }
   if(item.kind==='clock'){
     widget.dataset.clockStyle=['dots','minimal'].includes(config.clockStyle)?config.clockStyle:'dots';
+    const simple=document.createElement('div');
+    simple.className='clock-minimal-time';
+    simple.textContent=this.now().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    widget.insertBefore(simple,widget.querySelector('.widget-foot'));
   }
   return widget;
 };
@@ -184,6 +188,12 @@ M.renderStackEdit=function(host,loc){
   }
   const add=E('button','sheet-primary','＋ ADD A WIDGET TO THIS STACK');
   add.onclick=()=>this.openSheet('stack-add',{id:item.id});host.append(add);
+};
+const oldClock=M.refreshClock;
+M.refreshClock=function(){
+  oldClock.call(this);
+  const value=this.now().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  document.querySelectorAll('.clock-minimal-time').forEach(node=>node.textContent=value);
 };
 const oldSheet=M.renderSheet;
 M.renderSheet=function(){
