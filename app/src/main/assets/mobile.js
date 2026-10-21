@@ -64,7 +64,27 @@ function updateBattery(){
   $('batteryDesc').textContent=r.charging?'CHARGING NOW':'DEVICE BATTERY';
  }catch(e){}
 }
-function refreshNative(){updateBattery();updateDate();}
+let dismissedHomeSetup = false;
+function checkHomeStatus(){
+  let selected = false;
+  try { selected = !!(window.MEK && MEK.isDefaultHome()); } catch(e) {}
+  const status = $('homeSettingStatus');
+  if (status) status.textContent = selected ? 'MEK-AI is your current Home app' : 'Tap to replace Samsung Home on the Home button';
+  const onboarding = $('homeOnboarding');
+  if (onboarding) onboarding.classList.toggle('hidden', selected || dismissedHomeSetup || storageGet('mek_mobile_home_setup_dismissed', false));
+}
+function dismissHomeOnboarding(){
+  dismissedHomeSetup = true;
+  storageSet('mek_mobile_home_setup_dismissed', true);
+  $('homeOnboarding').classList.add('hidden');
+}
+function requestMakeHome(){
+  try {
+    if (window.MEK) MEK.requestHomeRole();
+    else if ($('homeSettingStatus')) $('homeSettingStatus').textContent = 'Android home selection is available on your phone.';
+  } catch(e) { if(window.MEK) MEK.openDefault('home'); }
+}
+function refreshNative(){updateBattery();updateDate();checkHomeStatus();}
 function getTasks(){
  const t=storageGet(STORAGE.tasks,[]);
  return Array.isArray(t)?t.filter(x=>x&&typeof x.text==='string').slice(0,30):[];
@@ -142,10 +162,10 @@ function setGreeting(){
  $('mekGreeting').textContent=hour<6?'You are still awake? That makes two of us.':hour<12?'Morning! I have been keeping an eye on the workshop. Mostly.':hour<18?'Oh, hello! I was just making sure nothing exploded.':'There you are. I was absolutely not taking a nap.';
 }
 window.addEventListener('DOMContentLoaded',()=>{
- updateDate();updateBattery();renderTasks();applyPrefs();setGreeting();
+ updateDate();updateBattery();renderTasks();applyPrefs();setGreeting();checkHomeStatus();
  $('appSearch').addEventListener('input',renderApps);
  $('wallpaperToggle').addEventListener('change',event=>{storageSet(STORAGE.wallpaper,event.target.checked);applyPrefs();});
  $('motionToggle').addEventListener('change',event=>{storageSet(STORAGE.motion,event.target.checked);applyPrefs();});
  setInterval(()=>{updateDate();updateBattery();},30000);
 });
-window.navigate=navigate;window.goBackInLauncher=goBackInLauncher;window.refreshNative=refreshNative;window.addTask=addTask;
+window.navigate=navigate;window.goBackInLauncher=goBackInLauncher;window.refreshNative=refreshNative;window.addTask=addTask;window.requestMakeHome=requestMakeHome;window.dismissHomeOnboarding=dismissHomeOnboarding;
