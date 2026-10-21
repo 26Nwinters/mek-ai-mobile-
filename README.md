@@ -1,62 +1,70 @@
-# MEK-AI Mobile // The Overgrown Terminal
+# MEK-AI Mobile // Your Overgrown Android Home
 
-A **real, experimental Android 12+ home launcher** for the Galaxy S10+ (SM-G975U). It blends the MEK-AI Hideaway's existing character artwork and overgrown workshop aesthetic with a restrained dot-matrix interface.
+**v0.2.0: editable launcher alpha, designed for the Galaxy S10+ (Android 12).**
 
-**Android application ID:** `com.mekai.mobile`  
-**First alpha:** `0.1.0`  
-**Requires root:** No  
-**Works offline:** Home screen, app drawer, clock, battery, saved tasks, preferences and Android shortcuts work without internet.
+A real, non-root Android **home launcher** that keeps MEK-AI's forest-green, weathered workshop personality while providing a phone-like customizable tile grid. It replaces your **home screen**, not Android firmware, notification shade, or lock screen.
 
-## What works now
+## Installation
 
-- Selectable Android home launcher (or launch it as a normal app to test safely).
-- Five native-hosted screens: Home, App Archive, MEK-AI companion, Control Room, Workshop Settings.
-- Live dot-matrix clock, native battery reading and date.
-- Searchable grid of the **real installed apps**, with their actual Android icons. Tapping launches the app.
-- Shortcuts for phone dialer, messages, camera, music and system settings.
-- Add, complete and remove local tasks. They persist in the app's private WebView storage.
-- Turn atmospheric wallpaper and motion effects on/off.
-- An on-device MEK-AI portrait built from the approved artwork in the original `mek-ai` repository.
-- Launches the [existing web companion](https://26nwinters.github.io/mek-ai/) when you ask to speak with MEK-AI.
+1. Download the [tested v0.2.0 APK from the successful GitHub Actions build](https://github.com/26Nwinters/mek-ai-mobile-/actions/runs/39629146428), under Artifacts, or use the direct APK provided in the ChatGPT conversation.
+2. Install it on Android 12+, allowing *Install unknown apps* for your browser or file manager only when prompted.
+3. If Android reports **App not installed** when updating v0.1.1, first uninstall the previous MEK-AI development build. **Warning: this clears its saved local tasks, notes, and preferences.** The CI debug signing key is not stable between workflow runs.
+4. Choose **MEK-AI Mobile** under **Settings → Apps → Choose default apps → Home app**.
+5. **One UI Home** stays installed. You can return to it using the same Android Home app setting whenever you wish.
 
-## What is deliberately **not** claimed yet
+## Rearrange your home screen
 
-- This launcher does **not** replace the Samsung lock screen, status bar, notification shade or firmware.
-- Voice recognition and Tapo switching are **not** native features in this first APK; the Companion button opens the existing web assistant.
-- Control Room opens genuine Android settings screens; it does **not** falsely indicate that Wi-Fi, Bluetooth or Tapo devices have been switched.
-- Weather is a shortcut to the forecast, not fake weather data.
-- Tasks are local checklist items, not Android alarm/reminder notifications.
+- **Long-press** an empty space or any tile (~0.6 seconds): widgets enter jiggle/edit mode.
+- Tap **+ WIDGETS** to insert clock, battery, weather shortcut, MEK-AI companion, tasks, music shortcut, or workshop note.
+- Tap **APPS** to select an installed Android app to pin to the grid.
+- Tap **GRID** to change between **3 and 6 columns**, or use **Workshop Settings → Home Screen Grid**.
+- Grab the **⠿ handle** at the top-right of a tile and drag over another tile to reorder. Use **×** to remove a tile. Press **DONE** to leave edit mode.
+- Choose **Overgrown**, **Amber Industrial**, or **Moss Night** as a color theme. Toggle textured wallpaper and animations in Workshop Settings.
 
-## Get the APK
+Your layout, column count, tasks, workshop note, and theme are saved locally to the launcher.
 
-1. Open the [latest Build MEK-AI Mobile APK workflow](https://github.com/26Nwinters/mek-ai-mobile-/actions/workflows/android.yml).
-2. Open the newest **successful** workflow run.
-3. Under **Artifacts**, download `MEK-AI-Mobile-v0.1.0-debug`.
-4. Extract the ZIP and install `app-debug.apk` on your Galaxy S10+.
-5. Grant your file manager/browser permission to install this APK if Android asks.
-6. Open MEK-AI Mobile from your apps. **Keep One UI Home as your default until you approve this alpha.**
+## Stability improvements in v0.2.0
 
-To try MEK-AI as the default later, open **Workshop Settings → Choose Default Launcher**, or Android Settings → Apps → Choose default apps → Home app. You can switch back to **One UI Home** at any time.
+Previously the App Archive requested and converted every installed app icon in **one synchronous JavaScript-to-Android call**. This could block the WebView when switching tabs.
 
-**Signing warning:** Automated alpha APKs currently use ephemeral GitHub-hosted debug keys. Updating to a *later workflow's build* may require uninstalling this alpha first (which clears locally saved tasks). Do not rely on seamless in-place updates until a persistent private release signing key has been configured. Never commit that private signing key to the public repository.
+Now:
 
-## Build details
+- Android discovers apps on a background thread.
+- The App Archive paints in small batches rather than creating every app item in one frame.
+- App icons are fetched lazily when visible and cached in memory.
+- Navigation does not repeatedly rescan installed apps when switching screens.
+- The five-tab launcher interface and layout operations are covered by automated tests.
 
-- Native Android shell: Java / WebView.
-- UI: local HTML, CSS and JavaScript packaged inside the APK, not loaded from a website.
-- Android Gradle plugin 8.7.3, Gradle 8.9, Java 17, minSdk 31, targetSdk 32.
-- GitHub Actions builds an APK remotely, so Android Studio and an emulator are not required on the Chromebook.
-- The build downloads **only approved MEK-AI art from the owner's existing public asset repo** and converts it to optimized WebP. The art is bundled; it doesn't fetch at runtime.
+**These changes passed simulated UI smoke tests and the GitHub Android APK build. Actual stability on your Galaxy S10+ still needs real-device verification.**
 
-## Security / privacy
+## What's functional
 
-No root, accessibility service, microphone permission, location permission, account credentials, or `QUERY_ALL_PACKAGES` permission is required. Android app discovery uses the scoped launcher intent query. The JavaScript bridge runs only against bundled local assets and opens pre-approved Android intents / URLs. All checklist items remain on-device.
+- Android Home role and native installed-app launching.
+- Five pages: customizable Home, searchable App Archive, MEK-AI Companion, Control Room, and Workshop Settings.
+- Live dot-matrix clock, actual Android battery status, local tasks, personal note.
+- Persisted customizable home grid, themes, reduce-motion setting.
+- Android settings shortcuts and access to existing MEK-AI web companion.
 
-## Source map
+## Not yet implemented
 
-- `app/src/main/java/com/mekai/mobile/MainActivity.java` — Android launcher and permitted native interactions.
-- `app/src/main/assets/index.html` — the five screens.
-- `app/src/main/assets/mobile.css` — weathered/pixel visual identity.
-- `app/src/main/assets/mobile.js` — navigation, checklist, actual app drawer and widgets.
-- `tools/prepare_art.py` — reuses original approved robot/workshop illustrations.
-- `.github/workflows/android.yml` — zero-local-Android-Studio APK build.
+- Third-party **Android App Widgets** (the + Widgets chooser currently adds the launcher’s **built-in modules**).
+- Multi-home-screen swiping, custom Samsung lock screen/notification shade, or replacing Android system settings.
+- Integrated on-device voice wake-word, live weather API, Android alarm notifications, or direct Tapo device control.
+- App data migration between CI debug-signed APKs.
+
+The Tapo controller in the original MEK-AI app runs on a separate machine. This mobile launcher does not claim to control lights unless a secure reachable controller connection is configured.
+
+## Development
+
+Tech: Java activity / Android WebView + local HTML/CSS/JS, Android 12+, AGP 8.7.3, Java 17, Gradle 8.9.
+
+- `app/src/main/java/com/mekai/mobile/MainActivity.java` — Home role, native shortcuts, background app discovery, lazy icon bridge.
+- `app/src/main/assets/index.html` — five launcher screens, editor overlay, app picker.
+- `app/src/main/assets/mobile.css` — responsive grid, editing, jiggle animation, industrial theme.
+- `app/src/main/assets/mobile.js` — app lifecycle, editing gestures, app list, tasks, saved preferences.
+- `app/src/main/assets/layout-core.js` — validated tile model, reordering, column/span rules.
+- `tests/` — unit tests plus jsdom smoke tests of tabs, editing and app pinning.
+- `tools/prepare_art.py` — optimizes the approved original MEK-AI artwork into WebP at build time.
+- `.github/workflows/android.yml` — remote tests, Android compilation and APK artifact.
+
+From a dev environment: `npm install && npm test`. GitHub Actions runs those checks and compiles the APK, so an Android Studio install on the Chromebook isn't necessary.
