@@ -33,6 +33,10 @@ import org.json.JSONObject;
 
 public class MainActivity extends Activity {
     private WebView web;
+    private final java.util.concurrent.ExecutorService appExecutor =
+        java.util.concurrent.Executors.newSingleThreadExecutor();
+    private final android.util.LruCache<String,String> iconCache =
+        new android.util.LruCache<>(100);
     private static final String TAG = "MEKMobile";
     private static final String HOME = "file:///android_asset/index.html";
 
@@ -61,6 +65,16 @@ public class MainActivity extends Activity {
         });
         setContentView(web);
         web.loadUrl(HOME);
+    }
+
+    @Override protected void onDestroy() {
+        appExecutor.shutdownNow();
+        if (web != null) {
+            web.removeJavascriptInterface("MEK");
+            web.destroy();
+            web = null;
+        }
+        super.onDestroy();
     }
 
     @Override protected void onResume() {
@@ -117,6 +131,22 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> requestHome());
         }
 
+        /* The app drawer must not block JavaScript while converting every icon.
+           Only package names and labels travel in the first async callback. */
+        @JavascriptInterface public void requestApps() {
+            appExecutor.execute(() -> {
+                String payload = getApps();
+                runOnUiThread(() -> {
+                    if (web != null) {
+                        web.evaluateJavascript(
+                            "window.mekAppsReady && window.mekAppsReady(" +
+                            JSONObject.quote(payload) + ")", null
+                        );
+                    }
+                });
+            });
+        }
+
         @JavascriptInterface public String getApps() {
             JSONArray result = new JSONArray();
             try {
@@ -134,12 +164,26 @@ public class MainActivity extends Activity {
                     JSONObject item = new JSONObject();
                     item.put("name", info.loadLabel(pm).toString());
                     item.put("pkg", pkg);
-                    try { item.put("icon", iconData(info.loadIcon(pm))); }
-                    catch (Exception ignored) { item.put("icon", ""); }
                     result.put(item);
                 }
             } catch (Exception e) { Log.w(TAG, "App listing failed", e); }
             return result.toString();
+        }
+
+        @JavascriptInterface public String getAppIcon(String pkg) {
+            if (pkg == null || !pkg.matches("[a-zA-Z0-9_.]{3,180}")) return "";
+            synchronized (iconCache) {
+                String cached = iconCache.get(pkg);
+                if (cached != null) return cached;
+            }
+            try {
+                Drawable drawable = getPackageManager().getApplicationIcon(pkg);
+                String encoded = iconData(drawable);
+                synchronized (iconCache) { iconCache.put(pkg, encoded); }
+                return encoded;
+            } catch (Exception e) {
+                return "";
+            }
         }
 
         private String iconData(Drawable drawable) {
