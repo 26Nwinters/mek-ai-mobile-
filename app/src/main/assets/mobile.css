@@ -38,3 +38,12 @@ h1{font-family:Georgia,serif;font-weight:400;letter-spacing:-1px;font-size:35px;
 body.reduce-motion *,body.reduce-motion *:before,body.reduce-motion *:after{animation:none!important;transition:none!important}
 @media(min-width:480px){.view{padding-left:28px;padding-right:28px}.mek-feature{height:230px}.top-tiles .tile{min-height:165px}.feature-photo{right:0}.mek-stage{height:380px}}
 @media(max-width:350px){.view{padding-left:13px;padding-right:13px}.clock-date{font-size:9px}#dotclock{min-width:170px}.nav-item{font-size:7px}.nav-icon{font-size:22px}.app-icon-wrap{width:55px;height:55px}.top-tiles .tile{padding:11px}.battery-value{font-size:36px}}
+
+/* Native launcher first-run permission education */
+.onboard-overlay{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:rgba(2,7,4,.91);backdrop-filter:blur(8px);padding:20px}
+.onboard-panel{width:100%;max-width:415px;padding:27px 22px 21px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(135deg,#1a281d,#101714 68%,#281f17);box-shadow:0 28px 90px #000}
+.onboard-panel h2{font:400 35px/1.12 Georgia,serif;letter-spacing:-1px;color:var(--ink);margin:15px 0}
+.onboard-panel h2 em{color:var(--amber)}
+.onboard-panel p{font-size:13px;line-height:1.65;color:#e0d6c4}
+.onboard-panel .onboard-muted{font-size:11px;color:#a8b29f;margin-bottom:25px}
+.onboard-secondary{width:100%;background:none;color:#aeb9ab;font:10px Consolas,monospace;letter-spacing:1.2px;padding:17px 8px 2px}
