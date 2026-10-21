@@ -36,6 +36,7 @@ M.iconDom=function(item,options={}){
       const mini=document.createElement('span');mini.className='folder-mini';
       mini.textContent=(app.label||'?').charAt(0).toUpperCase();
       symbol.append(mini);
+      this.loadIcon(mini,app.pkg);
     });
     for(let i=symbol.children.length;i<4;i++){
       const mini=document.createElement('span');mini.className='folder-mini';mini.textContent='·';symbol.append(mini);
@@ -52,7 +53,8 @@ M.iconDom=function(item,options={}){
 };
 M.widgetDom=function(item){
   const widget=document.createElement('div');
-  widget.className='widget-tile widget-'+item.kind;
+  widget.className='widget-tile widget-'+(item.kind==='mek'?'robot':item.kind);
+  if(item.kind==='house')widget.classList.add('widget-shortcut');
   switch(item.kind){
     case 'mek':{
       const robot=document.createElement('img');robot.src='mek.webp';robot.alt='';

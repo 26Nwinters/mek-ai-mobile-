@@ -56,6 +56,8 @@ test('initial screen has editable independent desktop and fixed favorites dock',
   assert.deepEqual(Array.from(d.querySelectorAll('#dock .dock-slot')).map(x=>x.dataset.uid),
     ['dock-phone','dock-messages','dock-browser','dock-camera']);
   assert.equal(d.getElementById('systemBattery').textContent,'37%');
+  assert.ok(d.querySelector('.widget-robot .widget-robot-copy'), 'The robot caption must overlay the MEK-AI image');
+  assert.ok(d.querySelector('.widget-robot>img'), 'Approved robot art is attached to the home widget');
   assert.equal(d.querySelectorAll('.bottom-nav,.nav-item').length,0);
   assert.equal(d.querySelector('.home-page').style.getPropertyValue('--home-cols'),'4');
   assert.equal(d.querySelector('.home-page').style.getPropertyValue('--home-rows'),'6');
