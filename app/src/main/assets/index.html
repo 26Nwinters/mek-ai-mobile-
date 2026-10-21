@@ -13,55 +13,25 @@
       <div class="chrome-right"><span id="topTime">10:24</span><span class="statusBattery" id="topBattery">--%</span></div>
     </div>
 
-    <section id="view-home" class="view active" aria-label="Home screen">
-      <div class="home-head">
+    <section id="view-home" class="view active" aria-label="Customizable home screen">
+      <div class="home-dashboard-header" id="homeHoldZone">
         <div class="micro-label">THE HIDEAWAY <span class="line"></span> PERSONAL TERMINAL</div>
-        <div class="clock-block">
-          <canvas id="dotclock" width="300" height="105" role="img" aria-label="Current time"></canvas>
-          <div id="homeDate" class="clock-date">WED · OCT 21</div>
+        <div class="home-dashboard-line">
+          <span class="home-dashboard-title">MY <em>WORKSHOP.</em></span>
+          <button id="editHomeButton" class="customize-btn" onclick="enterEditMode()">✎ CUSTOMIZE</button>
         </div>
       </div>
-
-      <div class="tiles duo top-tiles">
-        <button class="tile weather" onclick="MEK.openDefault('weather')">
-          <div class="tile-overline">LOCAL CONDITIONS <span class="corner-mark">↗</span></div>
-          <div class="weather-main"><span class="weather-glyph">☀</span><span class="weather-label">CHECK<br>FORECAST</span></div>
-          <div class="tile-foot">OPEN WEATHER <span>→</span></div>
-        </button>
-        <button class="tile battery" onclick="MEK.openDefault('battery')">
-          <div class="tile-overline">POWER CELL <span class="corner-mark">↗</span></div>
-          <div class="battery-value" id="batteryValue">--<small>%</small></div>
-          <div class="battery-track"><div id="batteryFill" class="battery-fill"></div></div>
-          <div class="tile-foot" id="batteryDesc">READING DEVICE</div>
-        </button>
-      </div>
-
-      <button class="mek-feature" onclick="navigate('mek')" aria-label="Go to MEK-AI companion">
-        <div class="feature-photo"><img src="mek.webp" alt="MEK-AI expressive amber-eyed robot"></div>
-        <div class="feature-overlay">
-          <div class="micro-label warm">● COMPANION ONLINE</div>
-          <div class="feature-name">MEK<span class="accent">-AI</span></div>
-          <div class="feature-sub">Your little piece of the workshop.</div>
-          <span class="feature-link">SAY HELLO <span>↗</span></span>
+      <div id="editToolbar" class="edit-toolbar hidden">
+        <div class="edit-toolbar-top"><span>✳ PERSONALIZE HOME</span><button onclick="exitEditMode()" class="edit-done">DONE ✓</button></div>
+        <div class="edit-toolbar-actions">
+          <button onclick="openEditor('widgets')">＋ WIDGETS</button>
+          <button onclick="openEditor('apps')">▦ APPS</button>
+          <button onclick="openEditor('grid')">▥ GRID</button>
+          <button onclick="openEditor('themes')">◐ THEME</button>
         </div>
-      </button>
-
-      <div class="section-title"><span>01 / TODAY'S LIST</span><button class="small-plus" onclick="addTask()" aria-label="Add task">＋</button></div>
-      <div class="tile tasks" id="taskList"></div>
-
-      <div class="section-title"><span>02 / YOUR SPACE</span><span class="micro-label muted">QUICK ACCESS</span></div>
-      <div class="shortcuts" id="homeApps">
-        <button onclick="MEK.openDefault('phone')"><span class="mini-icon">☎</span><span>PHONE</span></button>
-        <button onclick="MEK.openDefault('messages')"><span class="mini-icon">▤</span><span>MESSAGES</span></button>
-        <button onclick="MEK.openDefault('camera')"><span class="mini-icon">◎</span><span>CAMERA</span></button>
-        <button onclick="navigate('drawer')"><span class="mini-icon">▦</span><span>APPS</span></button>
       </div>
-
-      <button class="music" onclick="MEK.openDefault('music')">
-        <span class="music-symbol">♫</span>
-        <span class="music-copy"><span class="micro-label">A LITTLE BACKGROUND NOISE</span><strong>OPEN MUSIC</strong></span>
-        <span class="music-action">▶</span>
-      </button>
+      <div id="homeGrid" class="launcher-grid" role="list" aria-label="Arrangeable home screen tiles"></div>
+      <div id="homeHelp" class="grid-instruction">HOLD AN EMPTY SPOT OR A TILE TO CUSTOMIZE <span>✳</span></div>
       <div class="home-bottom-note">WHERE STORIES TAKE ROOT. <span>✳</span></div>
     </section>
 
@@ -69,6 +39,7 @@
       <div class="page-eyebrow">YOUR DEVICE / APPLICATIONS</div>
       <h1>APP <em>ARCHIVE</em></h1>
       <div class="search-wrapper"><span>⌕</span><input id="appSearch" type="search" placeholder="Search installed apps" autocomplete="off"></div>
+      <div id="appDrawerModeHint" class="drawer-pick-hint hidden">SELECT AN APP TO PIN TO YOUR HOME SCREEN <button onclick="cancelAppPick()">CANCEL</button></div>
       <div class="drawer-description"><span id="appCount">LOADING APPS</span><span>INSTALLED ON THIS DEVICE</span></div>
       <div id="appGrid" class="app-grid"></div>
       <div id="appEmpty" class="empty hidden">Nothing found in this drawer.</div>
@@ -123,7 +94,19 @@
         <label class="setting-row"><span><b>ATMOSPHERIC WALLPAPER</b><small>Keep the workshop behind the interface</small></span><input type="checkbox" id="wallpaperToggle" checked><i></i></label>
         <label class="setting-row"><span><b>REDUCE ANIMATIONS</b><small>Use less movement around MEK-AI</small></span><input type="checkbox" id="motionToggle"><i></i></label>
       </div>
-      <div class="section-title"><span>PHONE SETUP</span><span class="muted micro-label">SAFE INSTALL</span></div>
+      <div class="section-title"><span>HOME SCREEN GRID</span><span class="muted micro-label">ADJUST LAYOUT</span></div>
+      <div class="tile layout-settings">
+        <div><b>COLUMNS PER ROW</b><small>3 to 6 tile slots across the screen</small></div>
+        <div class="grid-stepper"><button onclick="changeColumns(-1)" aria-label="Decrease grid columns">−</button><span id="settingsGridCount">4</span><button onclick="changeColumns(1)" aria-label="Increase grid columns">＋</button></div>
+        <button class="outline-action" onclick="enterEditMode(true)">ARRANGE WIDGETS & APPS ↗</button>
+      </div>
+      <div class="section-title"><span>TERMINAL THEMES</span><span class="muted micro-label">COLOR VARIANTS</span></div>
+      <div id="themeChoices" class="theme-choices">
+        <button data-theme="overgrown" onclick="setTheme('overgrown')" class="chosen">✳ OVERGROWN</button>
+        <button data-theme="amber" onclick="setTheme('amber')">● AMBER</button>
+        <button data-theme="moss" onclick="setTheme('moss')">◐ MOSS</button>
+      </div>
+            <div class="section-title"><span>PHONE SETUP</span><span class="muted micro-label">SAFE INSTALL</span></div>
       <div class="tile settings-list">
         <button class="setting-link" onclick="requestMakeHome()"><span><b>MAKE MEK-AI MY HOME</b><small id="homeSettingStatus">Choose this launcher as the phone home screen</small></span><span>↗</span></button>
         <button class="setting-link" onclick="MEK.openDefault('home')"><span><b>MANAGE HOME APPS</b><small>Switch back to One UI Home whenever you like</small></span><span>↗</span></button>
@@ -138,7 +121,16 @@
       </div>
     </section>
 
-    <nav class="bottom-nav" aria-label="Mobile navigation">
+    <div id="editSheet" class="edit-sheet-overlay hidden" role="dialog" aria-modal="true" aria-label="Customize MEK-AI home">
+      <button class="edit-sheet-backdrop" onclick="closeEditor()" aria-label="Close customizer"></button>
+      <div class="edit-sheet-panel">
+        <div class="sheet-grip"></div>
+        <div class="sheet-head"><span id="editorHeading">CUSTOMIZE HOME</span><button onclick="closeEditor()">✕</button></div>
+        <div id="editSheetBody" class="edit-sheet-body"></div>
+      </div>
+    </div>
+
+        <nav class="bottom-nav" aria-label="Mobile navigation">
       <button class="nav-item on" data-route="home" onclick="navigate('home')"><span class="nav-icon">⌂</span><span>HOME</span></button>
       <button class="nav-item" data-route="drawer" onclick="navigate('drawer')"><span class="nav-icon">▦</span><span>APPS</span></button>
       <button class="nav-item companion-nav" data-route="mek" onclick="navigate('mek')"><span class="nav-icon">◧</span><span>MEK-AI</span></button>
@@ -156,5 +148,6 @@
       <button class="onboard-secondary" onclick="dismissHomeOnboarding()">NOT YET, LET ME LOOK AROUND</button>
     </div>
   </div>
-    <script src="mobile.js"></script>
+    <script src="layout-core.js"></script>
+  <script src="mobile.js"></script>
 </body></html>
