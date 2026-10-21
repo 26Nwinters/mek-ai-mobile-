@@ -125,7 +125,8 @@
       </div>
       <div class="section-title"><span>PHONE SETUP</span><span class="muted micro-label">SAFE INSTALL</span></div>
       <div class="tile settings-list">
-        <button class="setting-link" onclick="MEK.openDefault('home')"><span><b>CHOOSE DEFAULT LAUNCHER</b><small>Switch between MEK-AI and Samsung Home</small></span><span>↗</span></button>
+        <button class="setting-link" onclick="requestMakeHome()"><span><b>MAKE MEK-AI MY HOME</b><small id="homeSettingStatus">Choose this launcher as the phone home screen</small></span><span>↗</span></button>
+        <button class="setting-link" onclick="MEK.openDefault('home')"><span><b>MANAGE HOME APPS</b><small>Switch back to One UI Home whenever you like</small></span><span>↗</span></button>
         <button class="setting-link" onclick="MEK.openDefault('settings')"><span><b>ANDROID SETTINGS</b><small>Regular system settings remain available</small></span><span>↗</span></button>
       </div>
       <div class="section-title"><span>ABOUT</span><span class="muted micro-label">VERSION 0.1.0</span></div>
@@ -145,5 +146,15 @@
       <button class="nav-item" data-route="settings" onclick="navigate('settings')"><span class="nav-icon">⚙</span><span>SETUP</span></button>
     </nav>
   </div>
-  <script src="mobile.js"></script>
+  <div id="homeOnboarding" class="onboard-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="onboardTitle">
+    <div class="onboard-panel">
+      <div class="micro-label warm">MEK-AI / FIRST BOOT</div>
+      <h2 id="onboardTitle">Make this your <em>home.</em></h2>
+      <p>MEK-AI is a real Android home launcher. Right now you're opening it like an app because Samsung is still your default Home.</p>
+      <p class="onboard-muted">Setting it as Home makes your phone's Home button return here. Your apps and One UI Home stay installed, and you can switch back at any time.</p>
+      <button class="primary-action" onclick="requestMakeHome()">SET MEK-AI AS HOME <span>↗</span></button>
+      <button class="onboard-secondary" onclick="dismissHomeOnboarding()">NOT YET, LET ME LOOK AROUND</button>
+    </div>
+  </div>
+    <script src="mobile.js"></script>
 </body></html>
