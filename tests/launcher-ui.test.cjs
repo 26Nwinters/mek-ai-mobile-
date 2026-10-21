@@ -33,11 +33,14 @@ async function phone(seed=null){
     copyText:()=>{},
     showAppInfo:pkg=>calls.info.push(pkg),
     pickAndroidWidget:()=>calls.pickWidget++,
+    requestWidgetCatalog:()=>w.setTimeout(()=>w.mekNativeWidgetCatalog(JSON.stringify([{provider:'com.example.clock/.Widget',package:'com.example.clock',name:'Clock',minWidth:160,minHeight:90,minResizeWidth:100,minResizeHeight:80,maxResizeWidth:380,maxResizeHeight:400,resizeMode:3}])),0),
+    requestWidgetPreview:provider=>w.setTimeout(()=>w.mekNativeWidgetPreview(provider,'data:image/webp;base64,AAAA'),0),
+    selectWidgetProvider:provider=>{calls.selectedProvider=provider;},
     syncWidgetRects:data=>calls.widgets.push(JSON.parse(data)),
     syncWidgetInventory:data=>calls.widgetInventories.push(JSON.parse(data))
   };
   for(const name of ['launcher-core.js','launcher-v5.js','launcher-v5-ui.js',
-    'launcher-v5-sheets.js','launcher-v5-organizer.js','launcher-v5-gestures.js'])w.eval(read(name));
+    'launcher-v5-sheets.js','launcher-v5-organizer.js','launcher-v6-widgets.js','launcher-v5-gestures.js'])w.eval(read(name));
   await new Promise(resolve=>setTimeout(resolve,45));
   if(!w.document.querySelector('.home-page'))w.Mek.install();
   return {dom,w,d:w.document,M:w.Mek,calls};
@@ -465,4 +468,30 @@ test('reloading a layout synchronizes all persisted native widget bindings',asyn
   assert.ok(calls.widgetInventories.some(ids=>ids.includes(457)),
     'restored pages must report their widget IDs to Android');
   dom.window.close();
+});
+
+test('Galaxy widget picker displays installed app providers, previews and invokes provider choice',async()=>{
+ const {dom,M,d,calls}=await phone();
+ M.openSheet('widgets');
+ await new Promise(resolve=>setTimeout(resolve,180));
+ assert.ok(d.querySelector('.native-widget-catalog'));
+ assert.ok(d.querySelector('.provider-widget-item'));
+ const button=d.querySelector('.provider-widget-item');
+ assert.match(button.textContent,/Clock/);
+ button.click();
+ assert.equal(calls.selectedProvider,'com.example.clock/.Widget');
+ assert.equal(M.sheet,null);
+ dom.window.close();
+});
+test('native widget sizing respects provider resize flags and cell bounds',async()=>{
+ const {dom,M}=await phone();
+ M.nativeWidgetChosen(980,'Fixed Widget',150,120,
+   JSON.stringify({provider:'com.demo/.Fixed',resizeMode:0,minWidth:150,minHeight:120,
+     minResizeWidth:150,minResizeHeight:120,maxResizeWidth:150,maxResizeHeight:120}));
+ const widget=M.model.pages.flatMap(p=>p.items).find(x=>x.nativeId===980);
+ assert.ok(widget&&widget.limits);
+ assert.equal(widget.limits.resizeH,false);
+ assert.equal(widget.limits.resizeV,false);
+ assert.equal(M.Core.resizeSmart(M.model,widget.id,widget.w+1,widget.h),false);
+ dom.window.close();
 });

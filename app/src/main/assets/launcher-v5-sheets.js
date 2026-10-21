@@ -270,6 +270,13 @@ M.renderSheet=function(){
     if(!located||!['widget','android-widget'].includes(located.item.type)){this.closeSheet();return;}
     const item=located.item;
     help(host,'Adjust width and height separately. Drag the ⤡ corner handle in edit mode for direct scaling. If a widget expands into occupied cells, MEK-AI moves neighboring icons to free space.');
+    if(item.type==='android-widget'&&item.limits){
+      const limits=item.limits;
+      help(host,'ANDROID PROVIDER LIMITS: '+limits.minW+'–'+limits.maxW+
+        ' columns, '+limits.minH+'–'+limits.maxH+' rows. '+
+        (limits.resizeH?'WIDTH RESIZABLE. ':'WIDTH FIXED. ')+
+        (limits.resizeV?'HEIGHT RESIZABLE.':'HEIGHT FIXED.'));
+    }
     stepper(host,'WIDTH','Grid columns',item.w,1,settings.homeCols,value=>{
       const ok=this.mutate(model=>C.resizeSmart(model,item.id,value,item.h));
       if(ok===false)this.toast('NOT ENOUGH FREE GRID SPACE');

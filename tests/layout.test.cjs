@@ -196,3 +196,18 @@ test('atomic drag rolls back entire Home layout on placement failure',()=>{
  assert.equal(Core.moveAtomic(m,'nonexistent','home-1',2,3),false);
  assert.equal(JSON.stringify(m),before);
 });
+
+test('native widget declared resize directions survive JSON storage',()=>{
+ const model=Core.defaultState();
+ const item=Core.addHome(model,{id:'provider-test',type:'android-widget',nativeId:999,
+   provider:'com.demo/.Widget',label:'Fixed',
+   limits:{minW:2,minH:1,maxW:2,maxH:4,resizeH:false,resizeV:true},
+   x:0,y:0,w:2,h:1});
+ assert.ok(item);
+ const stored=Core.normalize(model);
+ const widget=Core.locate(stored,item.id).item;
+ assert.equal(widget.provider,'com.demo/.Widget');
+ assert.equal(widget.limits.resizeH,false);
+ assert.equal(Core.resizeSmart(stored,item.id,3,1),false);
+ assert.equal(Core.resizeSmart(stored,item.id,2,2),true);
+});

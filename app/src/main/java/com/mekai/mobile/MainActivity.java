@@ -32,6 +32,8 @@ import java.util.HashSet;
 import org.json.JSONException;
 import android.app.role.RoleManager;
 import android.os.Bundle;
+import android.util.SizeF;
+import java.util.Arrays;
 import android.os.BatteryManager;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -65,6 +67,7 @@ public class MainActivity extends Activity {
     private FrameLayout stage;
     private AppWidgetHost widgetHost;
     private final HashMap<Integer,AppWidgetHostView> widgetViews = new HashMap<>();
+    private final HashMap<Integer,String> lastWidgetSizes=new HashMap<>();
     private static final int REQUEST_EXPORT=930;
     private static final int REQUEST_IMPORT=931;
     private static final int REQUEST_PICK_WIDGET=932;
@@ -170,7 +173,7 @@ public class MainActivity extends Activity {
         for (AppWidgetHostView view : widgetViews.values()) {
             if (stage != null) stage.removeView(view);
         }
-        widgetViews.clear();
+        widgetViews.clear();lastWidgetSizes.clear();
         appExecutor.shutdownNow();
         if (web != null) {
             web.removeJavascriptInterface("MEK");
@@ -264,6 +267,7 @@ public class MainActivity extends Activity {
         if(id<=0 || widgetHost==null) return;
         Runnable task=widgetCleanupTasks.remove(id);
         if(task!=null)widgetCleanupHandler.removeCallbacks(task);
+        lastWidgetSizes.remove(id);
         AppWidgetHostView view=widgetViews.remove(id);
         if(view!=null && stage!=null)stage.removeView(view);
         widgetLayoutIds.remove(id);
@@ -361,6 +365,77 @@ public class MainActivity extends Activity {
         }
     }
 
+    private JSONObject widgetInfoJson(AppWidgetProviderInfo info) throws Exception {
+        float density=getResources().getDisplayMetrics().density;
+        JSONObject obj=new JSONObject();
+        obj.put("provider",info.provider.flattenToString());
+        obj.put("package",info.provider.getPackageName());
+        obj.put("name",String.valueOf(info.loadLabel(getPackageManager())));
+        obj.put("minWidth",Math.max(1,Math.round(info.minWidth/density)));
+        obj.put("minHeight",Math.max(1,Math.round(info.minHeight/density)));
+        obj.put("minResizeWidth",Math.max(1,Math.round(
+            (info.minResizeWidth>0?info.minResizeWidth:info.minWidth)/density)));
+        obj.put("minResizeHeight",Math.max(1,Math.round(
+            (info.minResizeHeight>0?info.minResizeHeight:info.minHeight)/density)));
+        obj.put("maxResizeWidth",info.maxResizeWidth>0?Math.round(info.maxResizeWidth/density):0);
+        obj.put("maxResizeHeight",info.maxResizeHeight>0?Math.round(info.maxResizeHeight/density):0);
+        obj.put("resizeMode",info.resizeMode);
+        obj.put("configure",info.configure!=null);
+        return obj;
+    }
+
+    private void requestWidgetCatalog(){
+        appExecutor.execute(()->{
+            JSONArray catalog=new JSONArray();
+            try{
+                List<AppWidgetProviderInfo> providers=AppWidgetManager.getInstance(this).getInstalledProviders();
+                Collections.sort(providers,(a,b)->
+                    String.valueOf(a.loadLabel(getPackageManager())).compareToIgnoreCase(
+                    String.valueOf(b.loadLabel(getPackageManager()))));
+                for(AppWidgetProviderInfo provider:providers){
+                    try{catalog.put(widgetInfoJson(provider));}catch(Exception ignored){}
+                }
+            }catch(Exception e){Log.w(TAG,"Widget provider discovery failed",e);}
+            final String json=catalog.toString();
+            runOnUiThread(()->callback("window.mekNativeWidgetCatalog && window.mekNativeWidgetCatalog("+
+                JSONObject.quote(json)+")"));
+        });
+    }
+
+    private void requestWidgetPreview(String flattened){
+        if(flattened==null||flattened.length()>240)return;
+        appExecutor.execute(()->{
+            ComponentName component=ComponentName.unflattenFromString(flattened);
+            if(component==null)return;
+            String image="";
+            try{
+                List<AppWidgetProviderInfo> providers=AppWidgetManager.getInstance(this)
+                    .getInstalledProvidersForPackage(component.getPackageName(),null);
+                for(AppWidgetProviderInfo info:providers)if(component.equals(info.provider)){
+                    Drawable preview=info.loadPreviewImage(this,getResources().getDisplayMetrics().densityDpi);
+                    if(preview!=null)image=iconData(preview);
+                    break;
+                }
+            }catch(Exception e){Log.w(TAG,"Widget preview unavailable",e);}
+            String encoded=image;
+            runOnUiThread(()->callback("window.mekNativeWidgetPreview && window.mekNativeWidgetPreview("+
+                JSONObject.quote(flattened)+","+JSONObject.quote(encoded)+")"));
+        });
+    }
+
+    private void chooseWidgetProvider(String flattened){
+        if(widgetHost==null||pendingWidgetId>0)return;
+        ComponentName provider=ComponentName.unflattenFromString(flattened);
+        if(provider==null)return;
+        try{
+            pendingWidgetId=widgetHost.allocateAppWidgetId();
+            getPreferences(MODE_PRIVATE).edit().putInt("pendingWidgetId",pendingWidgetId).apply();
+            Intent data=new Intent();
+            data.putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER,provider);
+            bindChosenWidget(pendingWidgetId,data);
+        }catch(Exception e){Log.w(TAG,"Widget provider could not be selected",e);cancelPendingWidget();}
+    }
+
     private void startWidgetPicker() {
         if(widgetHost==null)return;
         try {
@@ -384,9 +459,11 @@ public class MainActivity extends Activity {
             AppWidgetProviderInfo info=AppWidgetManager.getInstance(this).getAppWidgetInfo(widgetId);
             if(info==null)throw new IllegalStateException("Widget provider not bound");
             String label=String.valueOf(info.loadLabel(getPackageManager()));
+            JSONObject metadata=widgetInfoJson(info);
             callback("window.mekNativeWidgetChosen && window.mekNativeWidgetChosen("+
                 widgetId+","+JSONObject.quote(label)+","+
-                Math.max(info.minWidth,80)+","+Math.max(info.minHeight,80)+")");
+                metadata.optInt("minWidth",80)+","+metadata.optInt("minHeight",80)+","+
+                JSONObject.quote(metadata.toString())+")");
         } catch(Exception e){
             Log.w(TAG,"Unable to register chosen widget",e);
             try{widgetHost.deleteAppWidgetId(widgetId);}catch(Exception ignored){}
@@ -497,6 +574,17 @@ public class MainActivity extends Activity {
                     params.topMargin=(int)Math.round(y*scale);
                     hostView.setLayoutParams(params);
                     hostView.setVisibility(View.VISIBLE);
+                    float density=getResources().getDisplayMetrics().density;
+                    float widthDp=(float)(w*scale/density);
+                    float heightDp=(float)(h*scale/density);
+                    String signature=((int)widthDp)+"x"+((int)heightDp);
+                    if(!signature.equals(lastWidgetSizes.get(id))){
+                        try{
+                            hostView.updateAppWidgetSize(new Bundle(),Arrays.asList(
+                                new SizeF(Math.max(1f,widthDp),Math.max(1f,heightDp))));
+                            lastWidgetSizes.put(id,signature);
+                        }catch(Exception e){Log.w(TAG,"Widget provider size update failed",e);}
+                    }
                     hostView.bringToFront();
                 }
             }
@@ -553,6 +641,17 @@ public class MainActivity extends Activity {
                     startActivityForResult(intent,REQUEST_IMPORT);
                 }catch(Exception e){Log.w(TAG,"Backup import unavailable",e);}
             });
+        }
+
+        @JavascriptInterface public void requestWidgetCatalog(){
+            MainActivity.this.requestWidgetCatalog();
+        }
+        @JavascriptInterface public void requestWidgetPreview(String provider){
+            MainActivity.this.requestWidgetPreview(provider);
+        }
+        @JavascriptInterface public void selectWidgetProvider(String provider){
+            if(provider==null||provider.length()>240)return;
+            runOnUiThread(()->chooseWidgetProvider(provider));
         }
 
         @JavascriptInterface public void pickAndroidWidget() {

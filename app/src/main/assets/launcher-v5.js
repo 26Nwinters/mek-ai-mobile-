@@ -593,7 +593,7 @@ window.refreshNative=()=>Mek.refreshNative();
 window.goBackInLauncher=()=>Mek.goBack();
 window.mekBackupImported=json=>Mek.backupImported(json);
 window.mekBackupResult=message=>Mek.backupResult(message);
-window.mekNativeWidgetChosen=(id,label,w,h)=>Mek.nativeWidgetChosen(id,label,w,h);
+window.mekNativeWidgetChosen=(...args)=>Mek.nativeWidgetChosen(...args);
 window.mekNativeWidgetError=()=>Mek.nativeWidgetError();
 window.mekAppsChanged=()=>Mek.appsChanged();
 window.mekNativeHome=()=>Mek.nativeHome();

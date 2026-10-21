@@ -67,6 +67,12 @@ function cleanItem(item,cols=4,rows=6,asDock=false){
     out.nativeId=clamp(item.nativeId,1,1000000,-1);
     if(out.nativeId<1)return null;
     out.label=text(item.label||'Android Widget');
+    if(typeof item.provider==='string')out.provider=text(item.provider,240);
+    if(item.limits&&typeof item.limits==='object'){
+      out.limits={minW:clamp(item.limits.minW,1,cols,1),minH:clamp(item.limits.minH,1,rows,1),
+        maxW:clamp(item.limits.maxW,1,cols,cols),maxH:clamp(item.limits.maxH,1,rows,rows),
+        resizeH:item.limits.resizeH!==false,resizeV:item.limits.resizeV!==false};
+    }
   }
   if(item.type==='folder'){
     out.name=text(item.name||'Folder',35);
@@ -387,6 +393,11 @@ function resizeSmart(model,id,width,height){
   const cols=trial.settings.homeCols,rows=trial.settings.homeRows;
   const item=loc.item;
   const w=clamp(width,1,cols,item.w),h=clamp(height,1,rows,item.h);
+  if(item.type==='android-widget'&&item.limits){
+    const lim=item.limits;
+    if((w!==item.w&&!lim.resizeH)||(h!==item.h&&!lim.resizeV))return false;
+    if(w<lim.minW||w>lim.maxW||h<lim.minH||h>lim.maxH)return false;
+  }
   const candidate={...item,w,h,
     x:Math.min(item.x,cols-w),y:Math.min(item.y,rows-h)};
   if(!inside(candidate,cols,rows))return false;
