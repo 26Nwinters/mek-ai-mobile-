@@ -67,28 +67,29 @@ const GLYPHS={
  ':':['0','0','1','0','1','0','0']
 };
 function drawClock(){
-  const canvas=$('dotclock'); if(!canvas)return;
-  const ctx=canvas.getContext('2d');if(!ctx)return;
   const now=new Date();
   const value=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
-  canvas.setAttribute('aria-label','Time '+value);
-  const pitch=7.2,gap=10,width=(4*5+1)*pitch+4*gap;
-  let x=Math.max(1,(canvas.width-width)/2),y=22;
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  for(const ch of value){
-    const glyph=GLYPHS[ch]||GLYPHS['0'];
-    glyph.forEach((row,iy)=>row.split('').forEach((dot,ix)=>{
-      if(dot!=='1')return;
-      ctx.beginPath();ctx.arc(x+ix*pitch+2.5,y+iy*pitch+2.5,2.65,0,Math.PI*2);
-      ctx.fillStyle='#f1e5d1';ctx.fill();
-    }));
-    x+=(ch===':'?1:5)*pitch+gap;
-  }
+  document.querySelectorAll('canvas.tile-dot-clock').forEach(canvas=>{
+    const ctx=canvas.getContext('2d');if(!ctx)return;
+    canvas.setAttribute('aria-label','Time '+value);
+    const pitch=7.2,gap=10,width=(4*5+1)*pitch+4*gap;
+    let x=Math.max(1,(canvas.width-width)/2),y=22;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for(const ch of value){
+      const glyph=GLYPHS[ch]||GLYPHS['0'];
+      glyph.forEach((row,iy)=>row.split('').forEach((dot,ix)=>{
+        if(dot!=='1')return;
+        ctx.beginPath();ctx.arc(x+ix*pitch+2.5,y+iy*pitch+2.5,2.65,0,Math.PI*2);
+        ctx.fillStyle='#f1e5d1';ctx.fill();
+      }));
+      x+=(ch===':'?1:5)*pitch+gap;
+    }
+  });
 }
 function updateDate(){
   const date=new Date();
   if($('topTime'))$('topTime').textContent=String(date.getHours()).padStart(2,'0')+':'+String(date.getMinutes()).padStart(2,'0');
-  if($('homeDate'))$('homeDate').textContent=date.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toUpperCase().replace(',',' ·');
+  document.querySelectorAll('.tile-date').forEach(node=>node.textContent=date.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toUpperCase().replace(',',' ·'));
   drawClock();
 }
 function updateBattery(){
@@ -98,21 +99,26 @@ function updateBattery(){
     if(!Number.isFinite(status.percent))return;
     const percent=Math.max(0,Math.min(100,Math.round(status.percent)));
     if($('topBattery'))$('topBattery').textContent=percent+'%';
-    if($('batteryValue'))$('batteryValue').innerHTML=percent+'<small>%</small>';
-    if($('batteryFill'))$('batteryFill').style.width=percent+'%';
-    if($('batteryDesc'))$('batteryDesc').textContent=status.charging?'CHARGING NOW':'DEVICE BATTERY';
+    document.querySelectorAll('.home-tile[data-type="battery"]').forEach(tile=>{
+      const value=tile.querySelector('.widget-reading');
+      const fill=tile.querySelector('.battery-fill');
+      const label=tile.querySelector('.widget-mini-caption');
+      if(value)value.innerHTML=percent+'<small>%</small>';
+      if(fill)fill.style.width=percent+'%';
+      if(label)label.textContent=status.charging?'CHARGING NOW':'DEVICE BATTERY';
+    });
   }catch(e){}
 }
 function saveLayout(){appState.tiles=model.normalize(appState.tiles);storageSet(STORAGE.home,appState.tiles);}
 function widgetHTML(type){
   switch(type){
-    case 'clock':return '<div class="widget-body"><div class="widget-eyebrow">CHRONO / LOCAL</div><canvas class="tile-dot-clock" id="dotclock" width="300" height="105"></canvas><div class="tile-date" id="homeDate"></div></div>';
+    case 'clock':return '<div class="widget-body"><div class="widget-eyebrow">CHRONO / LOCAL</div><canvas class="tile-dot-clock" width="300" height="105"></canvas><div class="tile-date"></div></div>';
     case 'weather':return '<div class="widget-body"><div class="widget-eyebrow">WEATHER / LOCAL ↗</div><div class="weather-glyph">☀</div><div class="weather-word">OPEN<br>FORECAST</div></div>';
-    case 'battery':return '<div class="widget-body"><div class="widget-eyebrow">POWER CELL / LIVE</div><div class="widget-reading" id="batteryValue">--<small>%</small></div><div class="battery-track"><div id="batteryFill" class="battery-fill"></div></div><div class="widget-mini-caption" id="batteryDesc">READING DEVICE</div></div>';
+    case 'battery':return '<div class="widget-body"><div class="widget-eyebrow">POWER CELL / LIVE</div><div class="widget-reading">--<small>%</small></div><div class="battery-track"><div id="batteryFill" class="battery-fill"></div></div><div class="widget-mini-caption">READING DEVICE</div></div>';
     case 'mek':return '<div class="robot-widget"><img src="mek.webp" alt=""><div class="robot-widget-copy"><div class="micro-label warm">● COMPANION</div><strong>MEK<span>-AI</span></strong><small>The workshop\'s little keeper.</small><span class="robot-cta">SAY HELLO ↗</span></div></div>';
     case 'tasks':return '<div class="widget-body"><div class="widget-row-title">TODAY / YOUR LIST <span class="plus" data-task-add="true">＋</span></div><div class="tasks task-widget-list"></div></div>';
     case 'music':return '<div class="music-widget"><span class="music-symbol">♫</span><div class="music-widget-copy"><small>THE HIDEAWAY / AUDIO</small><b>OPEN MUSIC</b></div><span class="music-widget-play">▶</span></div>';
-    case 'notes':return '<div class="notes-widget"><div class="widget-row-title">WORKSHOP / NOTES <span>✎</span></div><div class="note-content" id="noteWidgetCopy"></div><div class="widget-mini-caption">TAP TO EDIT YOUR NOTE</div></div>';
+    case 'notes':return '<div class="notes-widget"><div class="widget-row-title">WORKSHOP / NOTES <span>✎</span></div><div class="note-content"></div><div class="widget-mini-caption">TAP TO EDIT YOUR NOTE</div></div>';
     default:return '';
   }
 }
@@ -171,8 +177,7 @@ function renderHome(){
     host.appendChild(empty);
   }
   renderTasks();
-  const note=$('noteWidgetCopy');
-  if(note)note.textContent=String(storageGet(STORAGE.note,'A little place for your thoughts.')).slice(0,300);
+  document.querySelectorAll('.note-content').forEach(node=>node.textContent=String(storageGet(STORAGE.note,'A little place for your thoughts.')).slice(0,300));
   updateDate();
   updateBattery();
 }
@@ -563,12 +568,15 @@ function setupAppActions(){
   const host=$('appGrid');
   host.addEventListener('click',e=>{
     const button=e.target.closest('.app-button');if(!button)return;
+    if(Date.now()<appState.suppressClickUntil)return;
     if(appState.pickMode){addAppTile(button.dataset.pkg,button.dataset.label);return;}
     try{if(window.MEK)MEK.launchApp(button.dataset.pkg);}catch(err){}
   });
   host.addEventListener('contextmenu',e=>{
     const button=e.target.closest('.app-button');if(!button)return;
-    e.preventDefault();addAppTile(button.dataset.pkg,button.dataset.label);
+    e.preventDefault();
+    appState.suppressClickUntil=Date.now()+700;
+    addAppTile(button.dataset.pkg,button.dataset.label);
   });
   $('appSearch').addEventListener('input',()=>{if(appState.loaded)renderApps();});
 }
