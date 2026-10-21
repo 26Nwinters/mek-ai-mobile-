@@ -23,7 +23,8 @@ const appState={
   cols:model.columns(storageGet(STORAGE.cols,4)),
   tiles:model.normalize(storageGet(STORAGE.home,null)),
   loaded:false, loading:false, apps:[], renderToken:0,
-  iconCache:new Map(), iconQueue:[], iconPending:new Set(), iconWorker:false,
+  pageSize:25, pageIndex:0, pageCount:1, filteredApps:[],
+  iconCache:new Map(), iconQueue:[], iconPending:new Map(), iconWorker:null,
   iconObserver:null, editorKind:'', longPressTimer:null, pressOrigin:null
 };
 
@@ -37,6 +38,8 @@ function navigate(route){
   if(appState.pickMode && route!=='drawer')appState.pickMode=false;
   closeEditor();
   appState.route=route;
+  document.body.classList.toggle('on-home',route==='home');
+  document.body.classList.toggle('on-drawer',route==='drawer');
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id==='view-'+route));
   document.querySelectorAll('.nav-item').forEach(v=>v.classList.toggle('on',v.dataset.route===route));
   window.scrollTo(0,0);
@@ -486,21 +489,48 @@ function setIcon(node,data){
   const img=document.createElement('img');img.src=data;img.alt='';img.loading='lazy';
   node.appendChild(img);
 }
+/* One native request at a time, all icon image decoding happens in Android's worker.
+   The WebView no longer blocks for synchronous per-icon conversions. */
 function queueIcon(pkg,node){
   if(appState.iconCache.has(pkg)){setIcon(node,appState.iconCache.get(pkg));return;}
-  appState.iconQueue.push({pkg,node});
-  if(!appState.iconWorker)processIconQueue();
+  if(appState.iconPending.has(pkg)){
+    appState.iconPending.get(pkg).push(node);
+  }else{
+    appState.iconPending.set(pkg,[node]);
+    appState.iconQueue.push(pkg);
+  }
+  processIconQueue();
 }
 function processIconQueue(){
-  appState.iconWorker=true;
-  if(!appState.iconQueue.length){appState.iconWorker=false;return;}
-  const task=appState.iconQueue.shift();
-  if(!task.node.isConnected){setTimeout(processIconQueue,10);return;}
-  let data='';
-  try{if(window.MEK&&typeof MEK.getAppIcon==='function')data=MEK.getAppIcon(task.pkg)||'';}catch(e){}
-  appState.iconCache.set(task.pkg,data);
-  setIcon(task.node,data);
-  setTimeout(processIconQueue,45);
+  if(appState.iconWorker || !appState.iconQueue.length)return;
+  const pkg=appState.iconQueue.shift();
+  const nodes=appState.iconPending.get(pkg)||[];
+  if(!nodes.some(n=>n.isConnected)){
+    appState.iconPending.delete(pkg);
+    setTimeout(processIconQueue,0);
+    return;
+  }
+  appState.iconWorker=pkg;
+  try{
+    if(window.MEK&&typeof MEK.requestAppIcon==='function'){
+      MEK.requestAppIcon(pkg);
+      // A failed native request must never block the rest of the icon queue.
+      setTimeout(()=>{if(appState.iconWorker===pkg)mekIconReady(pkg,'');},2500);
+    }else{
+      let data='';
+      if(window.MEK&&typeof MEK.getAppIcon==='function')data=MEK.getAppIcon(pkg)||'';
+      mekIconReady(pkg,data);
+    }
+  }catch(e){mekIconReady(pkg,'');}
+}
+function mekIconReady(pkg,data){
+  if(typeof pkg!=='string')return;
+  const pending=appState.iconPending.get(pkg)||[];
+  appState.iconPending.delete(pkg);
+  appState.iconCache.set(pkg,typeof data==='string'?data:'');
+  pending.forEach(node=>setIcon(node,data));
+  if(appState.iconWorker===pkg)appState.iconWorker=null;
+  setTimeout(processIconQueue,0);
 }
 function refreshApps(){
   if(appState.loaded){renderApps();return;}
@@ -536,39 +566,120 @@ function mekAppsReady(json){
     if($('appCount'))$('appCount').textContent='UNABLE TO LOAD INSTALLED APPS';
   }
 }
-function renderApps(){
+/* A horizontally paged drawer like a conventional Android launcher.
+   Only the current page and its neighbors are populated to avoid UI freezes. */
+function getDrawerPageSize(){
+  return window.innerHeight > 0 && window.innerHeight <= 660 ? 20 : 25;
+}
+function renderApps(resetPage=false){
   if(appState.route!=='drawer')return;
   const query=($('appSearch').value||'').toLowerCase().trim();
   const matches=appState.apps.filter(a=>a.name.toLowerCase().includes(query));
-  const host=$('appGrid');host.textContent='';
+  const host=$('appPageTrack');
+  if(!host)return;
+  appState.pageSize=getDrawerPageSize();
+  appState.filteredApps=matches;
+  appState.pageCount=Math.max(1,Math.ceil(matches.length/appState.pageSize));
+  appState.pageIndex=resetPage?0:Math.min(appState.pageIndex,appState.pageCount-1);
   const token=++appState.renderToken;
-  $('appCount').textContent=matches.length+' APPLICATION'+(matches.length===1?'':'S');
-  $('appEmpty').classList.toggle('hidden',matches.length!==0);
-  let i=0;
-  function batch(){
-    if(token!==appState.renderToken)return;
-    const frag=document.createDocumentFragment();
-    for(let end=Math.min(matches.length,i+24);i<end;i++){
-      const app=matches[i];
-      const button=document.createElement('button');button.className='app-button';
-      button.dataset.pkg=app.pkg;button.dataset.label=app.name;
-      const icon=document.createElement('span');icon.className='app-icon-wrap';
-      const glyph=document.createElement('span');glyph.textContent=(app.name||'?').charAt(0).toUpperCase();
-      glyph.style.color='#efb76c';glyph.style.fontSize='24px';icon.append(glyph);
-      attachAppIcon(icon,app.pkg);
-      const label=document.createElement('span');label.className='app-name';label.textContent=app.name;
-      button.append(icon,label);frag.append(button);
-    }
-    host.append(frag);
-    if(i<matches.length)setTimeout(batch,10);
+  host.textContent='';
+  const fragment=document.createDocumentFragment();
+  for(let i=0;i<appState.pageCount;i++){
+    const page=document.createElement('div');
+    page.className='app-page';
+    page.dataset.pageIndex=String(i);
+    page.setAttribute('role','group');
+    page.setAttribute('aria-label','Applications page '+(i+1)+' of '+appState.pageCount);
+    fragment.append(page);
   }
-  batch();
+  host.append(fragment);
+  const empty=$('appEmpty');
+  if(empty)empty.classList.toggle('hidden',matches.length!==0);
+  renderAppDots();
+  populatePage(appState.pageIndex,token);
+  populatePage(appState.pageIndex+1,token);
+  populatePage(appState.pageIndex-1,token);
+  goToAppPage(appState.pageIndex,true);
+}
+function populatePage(index,token=appState.renderToken){
+  if(token!==appState.renderToken||index<0||index>=appState.pageCount)return;
+  const page=$('appPageTrack').children[index];
+  if(!page||page.dataset.filled==='true')return;
+  page.dataset.filled='true';
+  const apps=appState.filteredApps.slice(index*appState.pageSize,(index+1)*appState.pageSize);
+  const fragment=document.createDocumentFragment();
+  for(const app of apps){
+    const button=document.createElement('button');
+    button.className='app-button';
+    button.dataset.pkg=app.pkg;
+    button.dataset.label=app.name;
+    button.setAttribute('aria-label','Open '+app.name);
+    const icon=document.createElement('span');icon.className='app-icon-wrap';
+    const glyph=document.createElement('span');
+    glyph.textContent=app.name.charAt(0).toUpperCase();
+    glyph.style.color='#efb76c';glyph.style.fontSize='23px';
+    icon.append(glyph);
+    attachAppIcon(icon,app.pkg);
+    const label=document.createElement('span');label.className='app-name';label.textContent=app.name;
+    button.append(icon,label);
+    fragment.append(button);
+  }
+  page.append(fragment);
+}
+function updateAppPageStatus(){
+  const count=appState.filteredApps.length;
+  if($('appCount'))$('appCount').textContent=count+' APP'+(count===1?'':'S')+' · PAGE '+(appState.pageIndex+1)+'/'+appState.pageCount;
+  document.querySelectorAll('#appPageDots button').forEach((dot,index)=>{
+    dot.classList.toggle('selected',index===appState.pageIndex);
+    dot.setAttribute('aria-current',index===appState.pageIndex?'page':'false');
+  });
+}
+function renderAppDots(){
+  const host=$('appPageDots');host.textContent='';
+  if(appState.pageCount===1){host.setAttribute('aria-label','Only app page');}
+  for(let i=0;i<appState.pageCount;i++){
+    const dot=document.createElement('button');
+    dot.type='button';
+    dot.setAttribute('aria-label','Go to app page '+(i+1));
+    dot.onclick=()=>goToAppPage(i);
+    host.append(dot);
+  }
+  updateAppPageStatus();
+}
+function goToAppPage(index,instant=false){
+  const page=Math.max(0,Math.min(appState.pageCount-1,Math.round(index)));
+  appState.pageIndex=page;
+  populatePage(page);
+  populatePage(page+1);
+  populatePage(page-1);
+  updateAppPageStatus();
+  const scroller=$('appPages');
+  const width=scroller?.clientWidth || 1;
+  if(!scroller)return;
+  const left=page*width;
+  if(typeof scroller.scrollTo==='function'){
+    try{scroller.scrollTo({left,behavior:instant?'instant':'smooth'});}
+    catch(e){scroller.scrollLeft=left;}
+  }else scroller.scrollLeft=left;
+}
+function handleAppScroll(){
+  const scroller=$('appPages');
+  if(appState.route!=='drawer'||!scroller)return;
+  const width=scroller.clientWidth;
+  if(!width)return;
+  const index=Math.min(appState.pageCount-1,Math.max(0,Math.round(scroller.scrollLeft/width)));
+  if(index===appState.pageIndex)return;
+  appState.pageIndex=index;
+  populatePage(index);
+  populatePage(index+1);
+  populatePage(index-1);
+  updateAppPageStatus();
 }
 function setupAppActions(){
-  const host=$('appGrid');
+  const host=$('appPageTrack');
   host.addEventListener('click',e=>{
-    const button=e.target.closest('.app-button');if(!button)return;
-    if(Date.now()<appState.suppressClickUntil)return;
+    const button=e.target.closest('.app-button');
+    if(!button||Date.now()<appState.suppressClickUntil)return;
     if(appState.pickMode){addAppTile(button.dataset.pkg,button.dataset.label);return;}
     try{if(window.MEK)MEK.launchApp(button.dataset.pkg);}catch(err){}
   });
@@ -578,7 +689,53 @@ function setupAppActions(){
     appState.suppressClickUntil=Date.now()+700;
     addAppTile(button.dataset.pkg,button.dataset.label);
   });
-  $('appSearch').addEventListener('input',()=>{if(appState.loaded)renderApps();});
+  $('appSearch').addEventListener('input',()=>{if(appState.loaded)renderApps(true);});
+  let scrollScheduled=false;
+  $('appPages').addEventListener('scroll',()=>{
+    if(scrollScheduled)return;
+    scrollScheduled=true;
+    setTimeout(()=>{scrollScheduled=false;handleAppScroll();},32);
+  },{passive:true});
+}
+function openAppDrawer(){
+  if(appState.route==='drawer')return;
+  if(appState.edit&&!appState.pickMode)exitEditMode();
+  navigate('drawer');
+}
+function closeAppDrawer(){
+  if(appState.pickMode){cancelAppPick();return;}
+  navigate('home');
+}
+function setupDrawerGestures(){
+  let touch=null;
+  document.addEventListener('pointerdown',e=>{
+    if(!e.isPrimary && e.pointerType==='touch')return;
+    const route=appState.route;
+    if(route==='home'&&!appState.edit){
+      if(e.clientY<window.innerHeight-175)return;
+      if(e.target.closest('input,textarea,.edit-sheet-overlay'))return;
+      touch={route,x:e.clientX,y:e.clientY,time:Date.now()};
+    }else if(route==='drawer'){
+      if(e.target.closest('input,.drawer-pick-hint'))return;
+      touch={route,x:e.clientX,y:e.clientY,time:Date.now()};
+    }
+  },{passive:true});
+  document.addEventListener('pointerup',e=>{
+    const p=touch;touch=null;
+    if(!p||Date.now()-p.time>1100)return;
+    const dx=e.clientX-p.x,dy=e.clientY-p.y;
+    if(Math.abs(dx)>75)return;
+    if(p.route==='home'&&appState.route==='home'&&!appState.edit&&dy< -70){
+      appState.suppressClickUntil=Date.now()+400;
+      openAppDrawer();
+    }else if(p.route==='drawer'&&appState.route==='drawer'&&dy>100){
+      closeAppDrawer();
+    }
+  },{passive:true});
+  document.addEventListener('pointercancel',()=>{touch=null;},{passive:true});
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&appState.route==='drawer'&&!e.target.matches('input'))closeAppDrawer();
+  });
 }
 let dismissedHomeSetup=false;
 function checkHomeStatus(){
@@ -609,7 +766,9 @@ window.addEventListener('DOMContentLoaded',()=>{
   setupTileClicks();
   setupLongPress();
   setupAppActions();
+  setupDrawerGestures();
   applyPrefs();setGreeting();
+  document.body.classList.add('on-home');
   renderHome();updateDate();updateBattery();checkHomeStatus();
   if($('settingsGridCount'))$('settingsGridCount').textContent=String(appState.cols);
   $('wallpaperToggle').addEventListener('change',e=>{storageSet(STORAGE.wallpaper,e.target.checked);applyPrefs();});
@@ -620,6 +779,10 @@ window.navigate=navigate;
 window.goBackInLauncher=goBackInLauncher;
 window.refreshNative=refreshNative;
 window.mekAppsReady=mekAppsReady;
+window.mekIconReady=mekIconReady;
+window.openAppDrawer=openAppDrawer;
+window.closeAppDrawer=closeAppDrawer;
+window.goToAppPage=goToAppPage;
 window.enterEditMode=enterEditMode;
 window.exitEditMode=exitEditMode;
 window.openEditor=openEditor;

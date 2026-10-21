@@ -34,15 +34,24 @@
       <div id="homeHelp" class="grid-instruction">HOLD AN EMPTY SPOT OR A TILE TO CUSTOMIZE <span>✳</span></div>
       <div class="home-bottom-note">WHERE STORIES TAKE ROOT. <span>✳</span></div>
     </section>
+    <button id="appSwipeHandle" type="button" class="app-swipe-handle" onclick="openAppDrawer()" aria-label="Swipe up or tap to open all apps">
+      <span class="handle-chevron">⌃</span><span>SWIPE UP · ALL APPS</span>
+    </button>
 
-    <section id="view-drawer" class="view" aria-label="App drawer">
-      <div class="page-eyebrow">YOUR DEVICE / APPLICATIONS</div>
-      <h1>APP <em>ARCHIVE</em></h1>
-      <div class="search-wrapper"><span>⌕</span><input id="appSearch" type="search" placeholder="Search installed apps" autocomplete="off"></div>
+    <section id="view-drawer" class="view drawer-view" aria-label="Swipeable app drawer">
+      <div class="drawer-heading-row">
+        <div><div class="page-eyebrow">YOUR DEVICE / ALL APPLICATIONS</div><h1>APP <em>ARCHIVE</em></h1></div>
+        <button class="drawer-close" onclick="closeAppDrawer()" aria-label="Close app drawer">⌄</button>
+      </div>
+      <div class="search-wrapper drawer-search"><span>⌕</span><input id="appSearch" type="search" placeholder="Search installed apps" autocomplete="off"></div>
       <div id="appDrawerModeHint" class="drawer-pick-hint hidden">SELECT AN APP TO PIN TO YOUR HOME SCREEN <button onclick="cancelAppPick()">CANCEL</button></div>
-      <div class="drawer-description"><span id="appCount">LOADING APPS</span><span>INSTALLED ON THIS DEVICE</span></div>
-      <div id="appGrid" class="app-grid"></div>
-      <div id="appEmpty" class="empty hidden">Nothing found in this drawer.</div>
+      <div class="drawer-description"><span id="appCount">LOADING APPS</span><span>SWIPE LEFT OR RIGHT ↔</span></div>
+      <div id="appPages" class="app-pages" aria-label="Application pages">
+        <div id="appPageTrack" class="app-page-track"></div>
+      </div>
+      <div id="appEmpty" class="empty hidden">No apps match your search.</div>
+      <div id="appPageDots" class="app-page-dots" role="group" aria-label="Choose app page"></div>
+      <div class="drawer-bottom-caption">SWIPE DOWN TO RETURN HOME <span>⌄</span></div>
     </section>
 
     <section id="view-mek" class="view" aria-label="MEK-AI companion">
@@ -112,7 +121,7 @@
         <button class="setting-link" onclick="MEK.openDefault('home')"><span><b>MANAGE HOME APPS</b><small>Switch back to One UI Home whenever you like</small></span><span>↗</span></button>
         <button class="setting-link" onclick="MEK.openDefault('settings')"><span><b>ANDROID SETTINGS</b><small>Regular system settings remain available</small></span><span>↗</span></button>
       </div>
-      <div class="section-title"><span>ABOUT</span><span class="muted micro-label">VERSION 0.1.0</span></div>
+      <div class="section-title"><span>ABOUT</span><span class="muted micro-label">VERSION 0.3.0</span></div>
       <div class="tile about-card">
         <div class="micro-label warm">MEK-AI MOBILE / ALPHA</div>
         <h2>AN OVERGROWN LITTLE OS.</h2>
@@ -130,9 +139,8 @@
       </div>
     </div>
 
-        <nav class="bottom-nav" aria-label="Mobile navigation">
+        <nav id="bottomNav" class="bottom-nav" aria-label="Mobile navigation">
       <button class="nav-item on" data-route="home" onclick="navigate('home')"><span class="nav-icon">⌂</span><span>HOME</span></button>
-      <button class="nav-item" data-route="drawer" onclick="navigate('drawer')"><span class="nav-icon">▦</span><span>APPS</span></button>
       <button class="nav-item companion-nav" data-route="mek" onclick="navigate('mek')"><span class="nav-icon">◧</span><span>MEK-AI</span></button>
       <button class="nav-item" data-route="controls" onclick="navigate('controls')"><span class="nav-icon">⌁</span><span>CONTROL</span></button>
       <button class="nav-item" data-route="settings" onclick="navigate('settings')"><span class="nav-icon">⚙</span><span>SETUP</span></button>

@@ -170,6 +170,24 @@ public class MainActivity extends Activity {
             return result.toString();
         }
 
+        /* Icon decoding stays off the WebView bridge's synchronous call path.
+           A single worker processes requests, then notifies JavaScript on the UI thread. */
+        @JavascriptInterface public void requestAppIcon(String pkg) {
+            if (pkg == null || !pkg.matches("[a-zA-Z0-9_.]{3,180}")) return;
+            appExecutor.execute(() -> {
+                String encoded = getAppIcon(pkg);
+                runOnUiThread(() -> {
+                    if (web != null) {
+                        web.evaluateJavascript(
+                            "window.mekIconReady && window.mekIconReady(" +
+                            JSONObject.quote(pkg) + "," +
+                            JSONObject.quote(encoded) + ")", null
+                        );
+                    }
+                });
+            });
+        }
+
         @JavascriptInterface public String getAppIcon(String pkg) {
             if (pkg == null || !pkg.matches("[a-zA-Z0-9_.]{3,180}")) return "";
             synchronized (iconCache) {

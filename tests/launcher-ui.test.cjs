@@ -24,17 +24,25 @@ async function createPhone(){
   await new Promise(resolve=>setImmediate(resolve));
   return dom;
 }
-test('five phone tabs switch without synchronous app-icon flood or exceptions',async()=>{
+test('four navigation tabs and the gesture drawer switch without blocking on app icons',async()=>{
   const dom=await createPhone(),w=dom.window,d=w.document;
   assert.equal(d.querySelectorAll('#homeGrid .home-tile').length,10);
   assert.equal(d.getElementById('topBattery').textContent,'72%');
+  assert.equal(d.querySelectorAll('.bottom-nav .nav-item').length,4);
+  assert.equal(d.querySelector('.bottom-nav [data-route="drawer"]'),null);
   for(let i=0;i<7;i++){
     for(const route of ['drawer','mek','controls','settings','home'])w.navigate(route);
   }
   w.navigate('drawer');
   await new Promise(resolve=>setTimeout(resolve,120));
-  assert.match(d.getElementById('appCount').textContent,/150 APPLICATIONS/);
-  assert.ok(d.querySelectorAll('.app-button').length>0);
+  assert.match(d.getElementById('appCount').textContent,/150 APPS/);
+  assert.equal(d.querySelectorAll('.app-page').length,6);
+  assert.equal(d.querySelectorAll('#appPageDots button').length,6);
+  assert.ok(d.querySelectorAll('.app-page[data-page-index="0"] .app-button').length>0);
+  w.goToAppPage(4,true);
+  assert.equal(d.querySelectorAll('.app-page[data-page-index="4"] .app-button').length,25);
+  assert.equal(d.querySelectorAll('#appPageDots button.selected').length,1);
+  assert.equal(d.querySelectorAll('#appPageDots button.selected')[0].getAttribute('aria-label'),'Go to app page 5');
   w.navigate('home');
   assert.equal(d.querySelector('.view.active').id,'view-home');
   dom.window.close();
@@ -54,7 +62,7 @@ test('edit, insert widget, resize columns, pin an app and exit',async()=>{
   w.openEditor('apps');
   assert.equal(d.getElementById('view-drawer').classList.contains('active'),true);
   await new Promise(resolve=>setTimeout(resolve,110));
-  d.querySelector('#appGrid .app-button').click();
+  d.querySelector('#appPageTrack .app-button').click();
   assert.equal(d.querySelectorAll('#homeGrid .home-tile').length,12);
   w.exitEditMode();
   assert.equal(d.body.classList.contains('edit-home'),false);
@@ -89,5 +97,40 @@ test('multiple copies of live widgets all update instead of only the first',asyn
   assert.deepEqual(Array.from(d.querySelectorAll('.home-tile[data-type="battery"] .widget-reading')).map(x=>x.textContent),['72%','72%']);
   assert.equal(d.querySelectorAll('.tile-dot-clock').length,2);
   assert.equal(d.querySelectorAll('.tile-date').length,2);
+  dom.window.close();
+});
+
+test('swiping upward at the home dock opens app pages and swiping downward closes them',async()=>{
+  const dom=await createPhone(),w=dom.window,d=w.document;
+  function pointer(type,target,x,y){
+    const ev=new w.Event(type,{bubbles:true,cancelable:true});
+    Object.defineProperties(ev,{clientX:{value:x},clientY:{value:y},isPrimary:{value:true},pointerType:{value:'touch'}});
+    target.dispatchEvent(ev);
+  }
+  const handle=d.getElementById('appSwipeHandle');
+  pointer('pointerdown',handle,175,735);
+  pointer('pointerup',handle,177,590);
+  assert.equal(d.querySelector('.view.active').id,'view-drawer');
+  await new Promise(resolve=>setTimeout(resolve,65));
+  pointer('pointerdown',d.getElementById('view-drawer'),180,180);
+  pointer('pointerup',d.getElementById('view-drawer'),180,325);
+  assert.equal(d.querySelector('.view.active').id,'view-home');
+  dom.window.close();
+});
+
+test('searching resets to one app page and page selection survives normal tab switches',async()=>{
+  const dom=await createPhone(),w=dom.window,d=w.document;
+  w.openAppDrawer();
+  await new Promise(resolve=>setTimeout(resolve,80));
+  w.goToAppPage(3,true);
+  assert.equal(d.querySelectorAll('.app-page').length,6);
+  w.navigate('mek');w.openAppDrawer();
+  assert.equal(d.querySelectorAll('#appPageDots button.selected')[0].getAttribute('aria-label'),'Go to app page 4');
+  const input=d.getElementById('appSearch');
+  input.value='Application 012';
+  input.dispatchEvent(new w.Event('input',{bubbles:true}));
+  assert.equal(d.querySelectorAll('.app-page').length,1);
+  assert.equal(d.querySelectorAll('#appPageTrack .app-button').length,1);
+  assert.match(d.getElementById('appCount').textContent,/1 APP · PAGE 1\/1/);
   dom.window.close();
 });

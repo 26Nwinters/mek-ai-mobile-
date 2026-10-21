@@ -1,3 +1,26 @@
+# MEK-AI Mobile v0.3.0 — gesture-based app archive
+
+The editable overgrown industrial launcher now follows the Android/Samsung-style interaction shown in the user's October 21 screen recording.
+
+## What changed
+
+- **Swipe up from the small handle just above the bottom dock** (or tap it) to open the installed-app drawer. You can also swipe upward from the bottom portion of the home screen.
+- **Swipe horizontally in the drawer** to move through full-screen icon pages, five columns and up to five rows per page (four rows on short screens). Dots display your current page; tap a dot to jump.
+- **Swipe down in the drawer or tap the down chevron** to return home. Android's Back navigation also returns home.
+- The Apps **navigation tab is removed**; Home, MEK-AI, Control, and Setup remain accessible.
+- The searchable drawer and home-grid **pin app** workflow continue to work. Enter edit mode → Apps → choose an installed app; it becomes a home tile.
+- App icons now load asynchronously via a worker-side Android bridge, in addition to the earlier asynchronous app enumeration. Only the current and adjacent app pages are rendered, limiting memory pressure.
+
+## Status and installation
+
+**This is still an experimental launcher, not an Android ROM.** Build and UI smoke tests can pass without guaranteeing it is stable on a physical Galaxy S10+. Test app launching, horizontal page swipes, and returning Home while keeping Samsung One UI Home installed.
+
+Install the APK from [GitHub Actions](https://github.com/26Nwinters/mek-ai-mobile-/actions/workflows/android.yml). Android's Home app selection is under **Settings → Apps → Choose default apps → Home app**.
+
+**Development-build signing warning:** GitHub Action debug APKs are signed with ephemeral debug keys. If Android refuses to update v0.2.1, uninstall the older version, then install v0.3.0. Uninstalling clears MEK-AI's locally stored tiles, notes, tasks, and settings. Please don't remove Samsung's stock launcher.
+
+---
+
 # MEK-AI Mobile // Your Overgrown Android Home
 
 **v0.2.1: editable launcher alpha, designed for the Galaxy S10+ (Android 12).**
