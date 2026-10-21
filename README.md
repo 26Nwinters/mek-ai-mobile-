@@ -2,7 +2,7 @@
 
 MEK-AI Mobile is a custom Android Home launcher built around the original MEK-AI robot and overgrown industrial workshop aesthetic. The repository includes self-contained approved artwork.
 
-**Status: Integrated release candidate.** The Android APK is built and tested on CI; actual Galaxy S10+ performance and provider-specific native widgets must be checked on a real device before calling this stable. This is not a replacement Android operating system.
+**Status: Public experimental beta (v0.6.0).** The Android APK is built and verified on CI, including 61 automated tests and a 1,300-operation layout stress test. Additional browser smoke tests passed at three mobile viewport sizes. Galaxy S10+ performance and provider-specific native widgets must still be checked on a real device before calling this production-stable. This is not a replacement Android operating system.
 
 ## Core Galaxy-style launcher
 
