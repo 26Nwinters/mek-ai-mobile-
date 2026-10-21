@@ -224,6 +224,10 @@ M.renderDock=function(){
 };
 M.renderDrawer=function(){
   const host=$('drawerTrack');if(!host)return;
+  const isVertical=this.model.settings.appLayout==='vertical';
+  const viewport=$('drawerPages');
+  viewport.classList.toggle('vertical-drawer',isVertical);
+  host.classList.toggle('vertical-track',isVertical);
   if(this.view!=='drawer')return;
   const items=this.allDrawerItems();
   this.drawerSnapshot=items;
@@ -251,8 +255,13 @@ M.renderDrawer=function(){
     dots.append(dot);
   }
   const scroll=$('drawerPages');
-  try{scroll.scrollTo({left:this.drawerPage*(scroll.clientWidth||1),behavior:'auto'});}
-  catch(e){scroll.scrollLeft=this.drawerPage*(scroll.clientWidth||1);}
+  try{
+    if(isVertical)scroll.scrollTo({top:this.drawerPage*(scroll.clientHeight||1),behavior:'instant'});
+    else scroll.scrollTo({left:this.drawerPage*(scroll.clientWidth||1),behavior:'instant'});
+  }catch(e){
+    if(isVertical)scroll.scrollTop=this.drawerPage*(scroll.clientHeight||1);
+    else scroll.scrollLeft=this.drawerPage*(scroll.clientWidth||1);
+  }
   this.renderLibrarySelection?.();
   this.scheduleIconDrain();
 };
@@ -297,8 +306,10 @@ M.goDrawerPage=function(index){
   this.populateDrawerPage(this.drawerPage+1);
   this.populateDrawerPage(this.drawerPage-1);
   const scroller=$('drawerPages');
-  const left=this.drawerPage*(scroller.clientWidth||1);
-  try{scroller.scrollTo({left,behavior:'smooth'});}catch(e){scroller.scrollLeft=left;}
+  const vertical=this.model.settings.appLayout==='vertical';
+  const offset=this.drawerPage*(vertical?(scroller.clientHeight||1):(scroller.clientWidth||1));
+  try{scroller.scrollTo(vertical?{top:offset,behavior:'smooth'}:{left:offset,behavior:'smooth'});}
+  catch(e){if(vertical)scroller.scrollTop=offset;else scroller.scrollLeft=offset;}
   this.updateDrawerDots();
   this.renderLibrarySelection?.();
   this.scheduleIconDrain();
@@ -377,8 +388,10 @@ M.installUi=function(){
     requestAnimationFrame(()=>{
       queued=false;
       if(this.view!=='drawer')return;
-      const width=scroll.clientWidth;if(!width)return;
-      const index=Math.max(0,Math.min($('drawerTrack').children.length-1,Math.round(scroll.scrollLeft/width)));
+      const vertical=this.model.settings.appLayout==='vertical';
+      const size=vertical?scroll.clientHeight:scroll.clientWidth;
+      if(!size)return;
+      const index=Math.max(0,Math.min($('drawerTrack').children.length-1,Math.round((vertical?scroll.scrollTop:scroll.scrollLeft)/size)));
       if(index===this.drawerPage)return;
       this.drawerPage=index;this.populateDrawerPage(index);this.populateDrawerPage(index-1);this.populateDrawerPage(index+1);this.updateDrawerDots();
     });

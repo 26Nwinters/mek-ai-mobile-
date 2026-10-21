@@ -43,6 +43,12 @@ function sourceTouchesDisabled(target){
 function atStart(x,y,target){
   clearTimer();clearEdge();
   if(!validScene()||sourceTouchesDisabled(target))return;
+  if(M.model.settings.layoutLocked && M.view==='home' && !M.activeFolder){
+    // Locked Home still permits swipe/tap navigation, not editing or drag.
+    press={x,y,lastX:x,lastY:y,when:Date.now(),route:'home',source:null,resize:null,
+      moved:false,longPressed:false,armed:false,scrollStart:0};
+    return;
+  }
   const mode=M.activeFolder?'folder':M.view;
   const source=sourceFrom(target);
   const resizeButton=target.closest?.('.cell-resize');
@@ -193,7 +199,7 @@ function dockIndex(x,y){
 function dropOnHome(item,source,pageId,x,y){
   let result=false;
   if(source.loc==='home'||source.loc==='dock'){
-    result=M.mutate(model=>C.moveToHome(model,item.id,pageId,x,y));
+    result=M.mutate(model=>C.moveAtomic(model,item.id,pageId,x,y));
   }else if(source.loc==='folder'){
     const clone={...item,id:C.uid('app'),x,y,w:1,h:1};
     result=M.mutate(model=>{

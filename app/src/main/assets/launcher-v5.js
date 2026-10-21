@@ -134,6 +134,9 @@ const Mek={
     }
   },
   enterEdit(){
+    if(this.model.settings.layoutLocked){
+      this.toast('HOME LOCKED · UNLOCK IN SETTINGS');return;
+    }
     if(this.view!=='home')this.setView('home');
     this.edit=true;
     document.body.classList.add('editing');
@@ -246,7 +249,12 @@ const Mek={
     const needle=this.drawerQuery.toLowerCase();
     return items.filter(a=>(a.label||a.name||'').toLowerCase().includes(needle));
   },
-  render(){this.renderHome();this.renderDock();this.renderPageDots();this.renderSettings();if(this.view==='drawer')this.renderDrawer();if(this.activeFolder)this.renderFolder();this.scheduleWidgetSync();},
+  render(){
+    this.renderHome();this.renderDock();this.renderPageDots();this.renderSettings();
+    if(this.view==='drawer')this.renderDrawer();
+    if(this.activeFolder)this.renderFolder();
+    this.scheduleWidgetSync();
+  },
   refreshClock(){
     const now=this.now();
     $('systemTime').textContent=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');

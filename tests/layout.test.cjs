@@ -171,3 +171,28 @@ test('smart widget dimensions independently support narrow and tall proportions'
   item=Core.locate(state,widget.id).item;
   assert.equal(item.w,4);assert.equal(item.h,1);
 });
+
+test('Home lock and archive scroll preferences survive persistence and migration',()=>{
+ const m=Core.defaultState();
+ m.settings.layoutLocked=true;m.settings.appLayout='vertical';
+ const restored=Core.normalize(JSON.parse(JSON.stringify(m)));
+ assert.equal(restored.settings.layoutLocked,true);
+ assert.equal(restored.settings.appLayout,'vertical');
+ restored.settings.appLayout='unrecognized';
+ assert.equal(Core.normalize(restored).settings.appLayout,'horizontal');
+});
+test('widget stack supports multiple built-ins and restores single widget after removal',()=>{
+ const model=Core.defaultState(),src=model.pages[0].items.find(x=>x.kind==='clock');
+ assert.equal(Core.addToStack(model,src.id,{type:'widget',kind:'battery',x:0,y:0,w:2,h:2}),true);
+ const stack=Core.locate(model,src.id).item;
+ assert.equal(stack.type,'stack');assert.equal(stack.stack.length,2);
+ assert.equal(Core.normalize(model).pages[0].items.find(x=>x.id===src.id).type,'stack');
+ assert.equal(Core.removeStackChild(model,src.id,1),true);
+ assert.equal(Core.locate(model,src.id).item.type,'widget');
+ assert.equal(Core.locate(model,src.id).item.kind,'clock');
+});
+test('atomic drag rolls back entire Home layout on placement failure',()=>{
+ const m=Core.defaultState();const before=JSON.stringify(m);
+ assert.equal(Core.moveAtomic(m,'nonexistent','home-1',2,3),false);
+ assert.equal(JSON.stringify(m),before);
+});

@@ -8,7 +8,7 @@
 'use strict';
 const SYSTEM=new Set(['phone','messages','browser','camera','settings','mek','house','music','weather','calendar','files','drawer']);
 const WIDGETS=new Set(['mek','clock','battery','tasks','notes','weather','music','house','calendar']);
-const DEFAULTS={homeCols:4,homeRows:6,appCols:5,appRows:6,folderCols:4,folderRows:4,dockSlots:5,theme:'overgrown',dockStyle:'glass',iconSize:54,labels:true,motion:true,wallpaper:true,appSort:'alphabetical',homeDefault:'home-1',swipeUp:true,swipeDown:true,swipePages:true};
+const DEFAULTS={homeCols:4,homeRows:6,appCols:5,appRows:6,folderCols:4,folderRows:4,dockSlots:5,theme:'overgrown',dockStyle:'glass',iconSize:54,labels:true,motion:true,wallpaper:true,appSort:'alphabetical',homeDefault:'home-1',swipeUp:true,swipeDown:true,swipePages:true,layoutLocked:false,appLayout:'horizontal',widgetStackSwipe:true};
 let seq=0;
 function uid(prefix='item'){return prefix+'-'+Date.now().toString(36)+'-'+(++seq).toString(36);}
 function clamp(value,min,max,fallback){const n=Number(value);return Number.isFinite(n)?Math.max(min,Math.min(max,Math.round(n))):fallback;}
@@ -41,7 +41,7 @@ function defaultState(){
 }
 function cleanItem(item,cols=4,rows=6,asDock=false){
   if(!item||typeof item!=='object')return null;
-  if(!['app','system','folder','widget','android-widget'].includes(item.type))return null;
+  if(!['app','system','folder','widget','android-widget','stack'].includes(item.type))return null;
   const out={id:/^[A-Za-z0-9_-]{1,90}$/.test(item.id||'')?item.id:uid(),type:item.type};
   if(item.type==='app'){
     if(!packageOk(item.pkg))return null;
@@ -54,6 +54,13 @@ function cleanItem(item,cols=4,rows=6,asDock=false){
   if(item.type==='widget'){
     if(asDock||!WIDGETS.has(item.kind))return null;
     out.kind=item.kind;
+    if(item.config&&typeof item.config==='object')out.config={...item.config};
+  }
+  if(item.type==='stack'){
+    if(asDock)return null;
+    out.stack=(Array.isArray(item.stack)?item.stack:[]).slice(0,10).filter(ch=>ch&&WIDGETS.has(ch.kind)).map(ch=>({id:uid('stack-child'),kind:ch.kind,config:ch.config&&typeof ch.config==='object'?{...ch.config}:{}}));
+    if(!out.stack.length)return null;
+    out.active=clamp(item.active,0,out.stack.length-1,0);
   }
   if(item.type==='android-widget'){
     if(asDock)return null;
@@ -74,7 +81,7 @@ function cleanItem(item,cols=4,rows=6,asDock=false){
   }
   if(!asDock){
     out.x=clamp(item.x,0,cols-1,0);out.y=clamp(item.y,0,rows-1,0);
-    out.w=(item.type==='widget'||item.type==='android-widget')?clamp(item.w,1,cols,2):1;
+    out.w=(['widget','android-widget','stack'].includes(item.type))?clamp(item.w,1,cols,2):1;
     out.h=(item.type==='widget'||item.type==='android-widget')?clamp(item.h,1,rows,2):1;
     out.w=Math.min(out.w,cols-out.x);out.h=Math.min(out.h,rows-out.y);
   }
@@ -115,6 +122,7 @@ function normalize(input){
   s.homeDefault=typeof st.homeDefault==='string'&&/^[A-Za-z0-9_-]{1,60}$/.test(st.homeDefault)?st.homeDefault:'home-1';
   s.labels=st.labels!==false;s.motion=st.motion!==false;s.wallpaper=st.wallpaper!==false;
   s.swipeUp=st.swipeUp!==false;s.swipeDown=st.swipeDown!==false;s.swipePages=st.swipePages!==false;
+  s.layoutLocked=st.layoutLocked===true;s.appLayout=st.appLayout==='vertical'?'vertical':'horizontal';s.widgetStackSwipe=st.widgetStackSwipe!==false;
   const pages=[],ids=new Set();
   for(const p of (Array.isArray(input.pages)?input.pages:[]).slice(0,32)){
     if(!p||typeof p!=='object')continue;
@@ -308,9 +316,60 @@ function moveToDock(model,id,slot){
   return true;
 }
 function removeItem(model,id){return !!removeLocation(model,id);}
+/* Atomic move: snapshot the complete model and roll back on any failed
+   placement. This avoids data loss during cross-page drag, reflow or a
+   full Home grid. */
+function moveAtomic(model,id,pageId,x,y){
+  const snapshot=JSON.parse(JSON.stringify(model));
+  let ok=false;
+  try{ok=moveToHome(model,id,pageId,x,y)===true;}catch(e){ok=false;}
+  if(!ok){
+    for(const key of Object.keys(model))delete model[key];
+    Object.assign(model,snapshot);
+  }
+  return ok;
+}
+function removeSafe(model,id){
+  const located=locate(model,id);
+  if(!located)return false;
+  removeLocation(model,id);
+  return true;
+}
+/* Widgets can be a stack of built-in MEK-AI widgets. Each child keeps
+   independent settings while all children share one grid rectangle. */
+function addToStack(model,stackId,widget){
+  const loc=locate(model,stackId);
+  if(!loc||loc.kind!=='home')return false;
+  const incoming=cleanItem(widget,model.settings.homeCols,model.settings.homeRows);
+  if(!incoming||incoming.type!=='widget')return false;
+  const destination=loc.item;
+  if(destination.type==='widget'){
+    const child={id:uid('stack-child'),kind:destination.kind,config:destination.config||{}};
+    Object.assign(destination,{type:'stack',active:0,stack:[child]});
+    delete destination.kind;delete destination.config;
+  }
+  if(destination.type!=='stack')return false;
+  if(destination.stack.length>=10)return false;
+  destination.stack.push({id:uid('stack-child'),kind:incoming.kind,config:incoming.config||{}});
+  return true;
+}
+function removeStackChild(model,stackId,index){
+  const loc=locate(model,stackId);
+  if(!loc||loc.item.type!=='stack')return false;
+  const stack=loc.item;
+  if(index<0||index>=stack.stack.length)return false;
+  stack.stack.splice(index,1);
+  if(!stack.stack.length)return removeSafe(model,stackId);
+  stack.active=Math.min(stack.active,stack.stack.length-1);
+  if(stack.stack.length===1){
+    stack.type='widget';stack.kind=stack.stack[0].kind;stack.config=stack.stack[0].config||{};
+    delete stack.stack;delete stack.active;
+  }
+  return true;
+}
 function resize(model,id,w,h){
   const loc=locate(model,id);
-  if(!loc||loc.kind!=='home'||!['widget','android-widget'].includes(loc.item.type))return false;
+  if(!loc||loc.kind!=='home'||!['widget','android-widget','stack'].includes(loc.item.type))return false;
   const cols=model.settings.homeCols,rows=model.settings.homeRows;
   const item=loc.item;
   const candidate={...item,w:clamp(w,1,cols,item.w),h:clamp(h,1,rows,item.h)};
@@ -324,7 +383,7 @@ function resize(model,id,w,h){
 function resizeSmart(model,id,width,height){
   const trial=JSON.parse(JSON.stringify(model));
   const loc=locate(trial,id);
-  if(!loc||loc.kind!=='home'||!['widget','android-widget'].includes(loc.item.type))return false;
+  if(!loc||loc.kind!=='home'||!['widget','android-widget','stack'].includes(loc.item.type))return false;
   const cols=trial.settings.homeCols,rows=trial.settings.homeRows;
   const item=loc.item;
   const w=clamp(width,1,cols,item.w),h=clamp(height,1,rows,item.h);
@@ -430,5 +489,5 @@ function migrateLegacy(storage){
 }
 return {DEFAULTS,SYSTEM,WIDGETS,uid,clamp,packageOk,defaultState,normalize,cleanItem,
   inside,overlap,clear,freePosition,pageById,locate,addPage,firstFit,addHome,
-  removeLocation,mergeFolder,moveToHome,addDock,moveToDock,removeItem,resize,resizeSmart,reflow,deletePage,reorderPage,migrateLegacy};
+  removeLocation,mergeFolder,moveToHome,moveAtomic,removeSafe,addToStack,removeStackChild,addDock,moveToDock,removeItem,resize,resizeSmart,reflow,deletePage,reorderPage,migrateLegacy};
 });

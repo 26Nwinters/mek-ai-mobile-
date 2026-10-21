@@ -335,3 +335,10 @@ body.editing .cell-resize{touch-action:none;user-select:none;cursor:nwse-resize}
   .dock{gap:4px;padding:6px}
   .drawer-footer{letter-spacing:.25px;font-size:8px}
 }
+
+/* Stage 1: One UI-style vertical app archive is optional. */
+.drawer-pages.vertical-drawer{overflow-y:auto;overflow-x:hidden;scroll-snap-type:y mandatory;touch-action:pan-y}
+.drawer-track.vertical-track{flex-direction:column;width:100%;height:auto;min-height:100%}
+.drawer-track.vertical-track>.app-page{min-height:100%;height:calc(100dvh - 265px);flex:0 0 auto;scroll-snap-align:start}
+body[data-view="home"].layout-locked .grid-cell .cell-remove,
+body.layout-locked .cell-resize{display:none!important}

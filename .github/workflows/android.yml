@@ -2,7 +2,7 @@ name: Build MEK-AI Mobile APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, integrated-oneui-v0.6]
   workflow_dispatch:
 
 permissions:

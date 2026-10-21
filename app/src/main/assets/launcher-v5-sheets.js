@@ -209,6 +209,10 @@ M.renderSheet=function(){
       this.mutate(model=>{model.settings.wallpaper=checked;});});
     checkbox(host,'ANIMATIONS','Enable page motion and icon jiggle',settings.motion,checked=>{
       this.mutate(model=>{model.settings.motion=checked;});});
+    checkbox(host,'LOCK HOME LAYOUT','Prevent accidental dragging or editing',settings.layoutLocked===true,checked=>{
+      if(checked&&this.edit)this.exitEdit();
+      this.mutate(model=>{model.settings.layoutLocked=checked;});
+    });
     return;
   }
 
@@ -239,6 +243,13 @@ M.renderSheet=function(){
     help(host,'Choose how the app drawer is ordered. Search always remains available.');
     opt(host,'ALPHABETICAL A–Z','Sort by application name.',()=>{this.mutate(model=>{model.settings.appSort='alphabetical';});this.renderSheet();},settings.appSort==='alphabetical');
     opt(host,'CUSTOM ORDER','Keep your own preferred app order.',()=>{this.mutate(model=>{model.settings.appSort='custom';});this.renderSheet();},settings.appSort==='custom');
+    host.append(E('div','picker-section-label','APP DRAWER SCROLLING'));
+    opt(host,'HORIZONTAL PAGES','Traditional Galaxy app pages with indicator dots.',()=>{
+      this.mutate(model=>{model.settings.appLayout='horizontal';});this.renderSheet();
+    },settings.appLayout!=='vertical');
+    opt(host,'VERTICAL APP LIST','Optional vertically scrolling app pages.',()=>{
+      this.mutate(model=>{model.settings.appLayout='vertical';});this.renderSheet();
+    },settings.appLayout==='vertical');
     if(settings.appSort==='custom'){
       const apps=this.allDrawerItems().slice(0,80);
       help(host,'Long-press an app in the drawer to move it up or down. Recent choices appear first.');
