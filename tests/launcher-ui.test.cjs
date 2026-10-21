@@ -74,3 +74,20 @@ test('theme switching, notes and local task changes persist',async()=>{
   assert.match(d.querySelector('.note-content').textContent,/My very own terminal/);
   dom.window.close();
 });
+
+test('multiple copies of live widgets all update instead of only the first',async()=>{
+  const dom=await createPhone(),w=dom.window,d=w.document;
+  w.enterEditMode();
+  for(const label of ['Battery monitor','Dot clock','Workshop note']){
+    w.openEditor('widgets');
+    const pick=Array.from(d.querySelectorAll('.widget-pick')).find(n=>n.textContent.includes(label));
+    assert.ok(pick,'widget chooser contains '+label);
+    pick.click();
+  }
+  w.exitEditMode();
+  assert.equal(d.querySelectorAll('.home-tile[data-type="battery"]').length,2);
+  assert.deepEqual(Array.from(d.querySelectorAll('.home-tile[data-type="battery"] .widget-reading')).map(x=>x.textContent),['72%','72%']);
+  assert.equal(d.querySelectorAll('.tile-dot-clock').length,2);
+  assert.equal(d.querySelectorAll('.tile-date').length,2);
+  dom.window.close();
+});
