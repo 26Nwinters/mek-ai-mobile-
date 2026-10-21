@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#090f0c"><title>MEK-AI Mobile</title>
+  <link rel="stylesheet" href="mobile.css">
+</head>
+<body>
+  <div class="ambient"></div>
+  <div id="shell" class="shell">
+    <div class="chrome">
+      <div class="chrome-brand"><span class="signal-lamp"></span> MEK-AI <span class="muted">/ MOBILE</span></div>
+      <div class="chrome-right"><span id="topTime">10:24</span><span class="statusBattery" id="topBattery">--%</span></div>
+    </div>
+
+    <section id="view-home" class="view active" aria-label="Home screen">
+      <div class="home-head">
+        <div class="micro-label">THE HIDEAWAY <span class="line"></span> PERSONAL TERMINAL</div>
+        <div class="clock-block">
+          <canvas id="dotclock" width="300" height="105" role="img" aria-label="Current time"></canvas>
+          <div id="homeDate" class="clock-date">WED · OCT 21</div>
+        </div>
+      </div>
+
+      <div class="tiles duo top-tiles">
+        <button class="tile weather" onclick="MEK.openDefault('weather')">
+          <div class="tile-overline">LOCAL CONDITIONS <span class="corner-mark">↗</span></div>
+          <div class="weather-main"><span class="weather-glyph">☀</span><span class="weather-label">CHECK<br>FORECAST</span></div>
+          <div class="tile-foot">OPEN WEATHER <span>→</span></div>
+        </button>
+        <button class="tile battery" onclick="MEK.openDefault('battery')">
+          <div class="tile-overline">POWER CELL <span class="corner-mark">↗</span></div>
+          <div class="battery-value" id="batteryValue">--<small>%</small></div>
+          <div class="battery-track"><div id="batteryFill" class="battery-fill"></div></div>
+          <div class="tile-foot" id="batteryDesc">READING DEVICE</div>
+        </button>
+      </div>
+
+      <button class="mek-feature" onclick="navigate('mek')" aria-label="Go to MEK-AI companion">
+        <div class="feature-photo"><img src="mek.webp" alt="MEK-AI expressive amber-eyed robot"></div>
+        <div class="feature-overlay">
+          <div class="micro-label warm">● COMPANION ONLINE</div>
+          <div class="feature-name">MEK<span class="accent">-AI</span></div>
+          <div class="feature-sub">Your little piece of the workshop.</div>
+          <span class="feature-link">SAY HELLO <span>↗</span></span>
+        </div>
+      </button>
+
+      <div class="section-title"><span>01 / TODAY'S LIST</span><button class="small-plus" onclick="addTask()" aria-label="Add task">＋</button></div>
+      <div class="tile tasks" id="taskList"></div>
+
+      <div class="section-title"><span>02 / YOUR SPACE</span><span class="micro-label muted">QUICK ACCESS</span></div>
+      <div class="shortcuts" id="homeApps">
+        <button onclick="MEK.openDefault('phone')"><span class="mini-icon">☎</span><span>PHONE</span></button>
+        <button onclick="MEK.openDefault('messages')"><span class="mini-icon">▤</span><span>MESSAGES</span></button>
+        <button onclick="MEK.openDefault('camera')"><span class="mini-icon">◎</span><span>CAMERA</span></button>
+        <button onclick="navigate('drawer')"><span class="mini-icon">▦</span><span>APPS</span></button>
+      </div>
+
+      <button class="music" onclick="MEK.openDefault('music')">
+        <span class="music-symbol">♫</span>
+        <span class="music-copy"><span class="micro-label">A LITTLE BACKGROUND NOISE</span><strong>OPEN MUSIC</strong></span>
+        <span class="music-action">▶</span>
+      </button>
+      <div class="home-bottom-note">WHERE STORIES TAKE ROOT. <span>✳</span></div>
+    </section>
+
+    <section id="view-drawer" class="view" aria-label="App drawer">
+      <div class="page-eyebrow">YOUR DEVICE / APPLICATIONS</div>
+      <h1>APP <em>ARCHIVE</em></h1>
+      <div class="search-wrapper"><span>⌕</span><input id="appSearch" type="search" placeholder="Search installed apps" autocomplete="off"></div>
+      <div class="drawer-description"><span id="appCount">LOADING APPS</span><span>INSTALLED ON THIS DEVICE</span></div>
+      <div id="appGrid" class="app-grid"></div>
+      <div id="appEmpty" class="empty hidden">Nothing found in this drawer.</div>
+    </section>
+
+    <section id="view-mek" class="view" aria-label="MEK-AI companion">
+      <div class="page-eyebrow">MECHANICAL COMPANION / MK-01</div>
+      <h1>THE <em>HIDEAWAY</em></h1>
+      <div class="mek-stage">
+        <div class="mek-halo"></div>
+        <img src="mek.webp" alt="MEK-AI from the approved character reference" class="mek-portrait">
+        <div class="stage-label">UNIT: MEK-AI <span>● READY</span></div>
+      </div>
+      <div class="bot-dialog">
+        <div class="micro-label warm">MEK-AI / A LITTLE NOTE</div>
+        <p id="mekGreeting">Oh. Hello there. I was absolutely not taking a nap.</p>
+      </div>
+      <div class="section-title"><span>COMPANION CONTROLS</span><span class="muted micro-label">WEB ASSISTANT</span></div>
+      <button class="primary-action" onclick="MEK.openDefault('assistant')">OPEN MEK-AI ASSISTANT <span>↗</span></button>
+      <div class="small-print">Opens your existing MEK-AI web companion. Voice, timers, and smart-home features depend on its own permissions and controller connection.</div>
+      <div class="pair-tiles">
+        <button class="tile" onclick="navigate('controls')"><span class="setting-icon">⌁</span><b>HOUSE CONTROLS</b><small>CONNECTED SERVICES</small></button>
+        <button class="tile" onclick="navigate('home')"><span class="setting-icon">⌂</span><b>BACK HOME</b><small>RETURN TO TERMINAL</small></button>
+      </div>
+    </section>
+
+    <section id="view-controls" class="view" aria-label="Device and smart home controls">
+      <div class="page-eyebrow">CONTROL DECK / DEVICE</div>
+      <h1>CONTROL <em>ROOM</em></h1>
+      <div class="section-title"><span>DEVICE SHORTCUTS</span><span class="muted micro-label">ANDROID SETTINGS</span></div>
+      <div class="control-grid">
+        <button class="control-tile" onclick="MEK.openDefault('wifi')"><span class="control-icon">⌁</span><b>WI-FI</b><small>OPEN SETTINGS ↗</small></button>
+        <button class="control-tile" onclick="MEK.openDefault('bluetooth')"><span class="control-icon">ᛒ</span><b>BLUETOOTH</b><small>OPEN SETTINGS ↗</small></button>
+        <button class="control-tile" onclick="MEK.openDefault('display')"><span class="control-icon">◉</span><b>DISPLAY</b><small>OPEN SETTINGS ↗</small></button>
+        <button class="control-tile" onclick="MEK.openDefault('battery')"><span class="control-icon">▥</span><b>BATTERY</b><small>OPEN SETTINGS ↗</small></button>
+      </div>
+      <div class="section-title"><span>HOME AUTOMATION</span><span class="muted micro-label">MEK-AI LINK</span></div>
+      <div class="tile home-connect">
+        <div class="micro-label warm">● LINK STATUS / NOT CHECKED</div>
+        <h2>THE LIGHTS ARE WAITING.</h2>
+        <p>Your Tapo controls live inside your existing MEK-AI setup. We won't show fake connected switches here.</p>
+        <button onclick="MEK.openDefault('assistant')" class="outline-action">OPEN SMART HOME PANEL ↗</button>
+      </div>
+      <div class="small-print">The Chromebook controller at 127.0.0.1 does not automatically become reachable from this phone. Controls require separate secure network integration.</div>
+    </section>
+
+    <section id="view-settings" class="view" aria-label="Launcher settings">
+      <div class="page-eyebrow">PERSONALIZE / TERMINAL</div>
+      <h1>WORKSHOP <em>SETTINGS</em></h1>
+      <div class="section-title"><span>APPEARANCE</span><span class="muted micro-label">LOCAL TO PHONE</span></div>
+      <div class="tile settings-list">
+        <label class="setting-row"><span><b>ATMOSPHERIC WALLPAPER</b><small>Keep the workshop behind the interface</small></span><input type="checkbox" id="wallpaperToggle" checked><i></i></label>
+        <label class="setting-row"><span><b>REDUCE ANIMATIONS</b><small>Use less movement around MEK-AI</small></span><input type="checkbox" id="motionToggle"><i></i></label>
+      </div>
+      <div class="section-title"><span>PHONE SETUP</span><span class="muted micro-label">SAFE INSTALL</span></div>
+      <div class="tile settings-list">
+        <button class="setting-link" onclick="MEK.openDefault('home')"><span><b>CHOOSE DEFAULT LAUNCHER</b><small>Switch between MEK-AI and Samsung Home</small></span><span>↗</span></button>
+        <button class="setting-link" onclick="MEK.openDefault('settings')"><span><b>ANDROID SETTINGS</b><small>Regular system settings remain available</small></span><span>↗</span></button>
+      </div>
+      <div class="section-title"><span>ABOUT</span><span class="muted micro-label">VERSION 0.1.0</span></div>
+      <div class="tile about-card">
+        <div class="micro-label warm">MEK-AI MOBILE / ALPHA</div>
+        <h2>AN OVERGROWN LITTLE OS.</h2>
+        <p>Created for an Android phone. Inspired by dot-matrix hardware and the mechanical Hideaway. Home, app archive, notes, local tasks, system shortcuts, and companion access are included.</p>
+        <p class="small-print">This is a custom launcher, not a replacement firmware or Samsung lock screen.</p>
+      </div>
+    </section>
+
+    <nav class="bottom-nav" aria-label="Mobile navigation">
+      <button class="nav-item on" data-route="home" onclick="navigate('home')"><span class="nav-icon">⌂</span><span>HOME</span></button>
+      <button class="nav-item" data-route="drawer" onclick="navigate('drawer')"><span class="nav-icon">▦</span><span>APPS</span></button>
+      <button class="nav-item companion-nav" data-route="mek" onclick="navigate('mek')"><span class="nav-icon">◧</span><span>MEK-AI</span></button>
+      <button class="nav-item" data-route="controls" onclick="navigate('controls')"><span class="nav-icon">⌁</span><span>CONTROL</span></button>
+      <button class="nav-item" data-route="settings" onclick="navigate('settings')"><span class="nav-icon">⚙</span><span>SETUP</span></button>
+    </nav>
+  </div>
+  <script src="mobile.js"></script>
+</body></html>
