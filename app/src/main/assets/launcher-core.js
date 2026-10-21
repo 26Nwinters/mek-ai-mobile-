@@ -111,6 +111,7 @@ function normalize(input){
   s.theme=['overgrown','amber','moss'].includes(st.theme)?st.theme:'overgrown';
   s.dockStyle=['glass','metal','none'].includes(st.dockStyle)?st.dockStyle:'glass';
   s.appSort=['alphabetical','custom'].includes(st.appSort)?st.appSort:'alphabetical';
+  s.homeDefault=typeof st.homeDefault==='string'&&/^[A-Za-z0-9_-]{1,60}$/.test(st.homeDefault)?st.homeDefault:'home-1';
   s.labels=st.labels!==false;s.motion=st.motion!==false;s.wallpaper=st.wallpaper!==false;
   s.swipeUp=st.swipeUp!==false;s.swipeDown=st.swipeDown!==false;s.swipePages=st.swipePages!==false;
   const pages=[],ids=new Set();
