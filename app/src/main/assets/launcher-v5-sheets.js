@@ -301,6 +301,14 @@ M.renderSheet=function(){
       presetGrid.append(button);
     }
     host.append(presetGrid);
+    const editWidget=E('button','sheet-primary','◈ WIDGET SETTINGS');
+    editWidget.onclick=()=>this.openSheet('widget-config',{id:item.id});
+    host.append(editWidget);
+    if(item.type==='widget'||item.type==='stack'){
+      const stack=E('button','option-button',item.type==='stack'?'EDIT WIDGET STACK':'＋ CREATE WIDGET STACK');
+      stack.onclick=()=>this.openSheet(item.type==='stack'?'stack-edit':'stack-add',{id:item.id});
+      host.append(stack);
+    }
     return;
   }
 

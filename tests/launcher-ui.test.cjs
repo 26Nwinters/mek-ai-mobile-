@@ -40,7 +40,7 @@ async function phone(seed=null){
     syncWidgetInventory:data=>calls.widgetInventories.push(JSON.parse(data))
   };
   for(const name of ['launcher-core.js','launcher-v5.js','launcher-v5-ui.js',
-    'launcher-v5-sheets.js','launcher-v5-organizer.js','launcher-v6-widgets.js','launcher-v5-gestures.js'])w.eval(read(name));
+    'launcher-v5-sheets.js','launcher-v5-organizer.js','launcher-v6-widgets.js','launcher-v6-companion.js','launcher-v5-gestures.js'])w.eval(read(name));
   await new Promise(resolve=>setTimeout(resolve,45));
   if(!w.document.querySelector('.home-page'))w.Mek.install();
   return {dom,w,d:w.document,M:w.Mek,calls};
@@ -493,5 +493,47 @@ test('native widget sizing respects provider resize flags and cell bounds',async
  assert.equal(widget.limits.resizeH,false);
  assert.equal(widget.limits.resizeV,false);
  assert.equal(M.Core.resizeSmart(M.model,widget.id,widget.w+1,widget.h),false);
+ dom.window.close();
+});
+
+test('widget stacks render as one grid tile, swipe between contents and retain dimensions',async()=>{
+ const {dom,M,d}=await phone();
+ const clock=M.model.pages[0].items.find(x=>x.kind==='clock');
+ const originalCount=M.model.pages[0].items.length;
+ const before={w:clock.w,h:clock.h};
+ M.mutate(model=>M.Core.addToStack(model,clock.id,{type:'widget',kind:'battery',x:0,y:0,w:2,h:2}));
+ const stack=M.Core.locate(M.model,clock.id).item;
+ assert.equal(stack.type,'stack');assert.equal(stack.stack.length,2);
+ assert.equal(stack.w,before.w);assert.equal(stack.h,before.h);
+ assert.equal(M.model.pages[0].items.length,originalCount);
+ assert.ok(d.querySelector('.widget-stack[data-stack="'+clock.id+'"]'));
+ assert.equal(M.changeStack(clock.id,1),true);
+ assert.equal(M.Core.locate(M.model,clock.id).item.active,1);
+ assert.equal(d.querySelector('.widget-stack-current').classList.contains('widget-battery'),true);
+ dom.window.close();
+});
+
+test('per-widget expression, tint and opacity changes persist without changing other widgets',async()=>{
+ const {dom,M,d}=await phone();
+ const robot=M.model.pages[0].items.find(x=>x.kind==='mek');
+ M.openSheet('widget-config',{id:robot.id});
+ const mood=Array.from(d.querySelectorAll('.option-button')).find(x=>x.textContent==='SLEEP');
+ assert.ok(mood);mood.click();
+ assert.equal(M.Core.locate(M.model,robot.id).item.config.mood,'sleep');
+ const rendered=d.querySelector('.widget-robot');
+ assert.equal(rendered.dataset.mood,'sleep');
+ const cloned=M.Core.normalize(M.model);
+ assert.equal(M.Core.locate(cloned,robot.id).item.config.mood,'sleep');
+ dom.window.close();
+});
+
+test('stack management can remove one child and return to ordinary widget',async()=>{
+ const {dom,M,d}=await phone();
+ const robot=M.model.pages[0].items.find(x=>x.kind==='mek');
+ M.mutate(model=>M.Core.addToStack(model,robot.id,{type:'widget',kind:'clock',x:0,y:0,w:2,h:2}));
+ M.openSheet('stack-edit',{id:robot.id});
+ assert.equal(d.querySelectorAll('.page-manager-item').length,2);
+ M.mutate(model=>M.Core.removeStackChild(model,robot.id,1));
+ assert.equal(M.Core.locate(M.model,robot.id).item.type,'widget');
  dom.window.close();
 });

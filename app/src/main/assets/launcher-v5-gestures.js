@@ -332,7 +332,10 @@ function finish(x,y){
   const dx=x-p.x,dy=y-p.y;
   if(Math.max(Math.abs(dx),Math.abs(dy))<SWIPE_DISTANCE)return;
   if(Math.abs(dx)>Math.abs(dy)*1.24){
-    if(p.route==='home'&&!M.edit&&M.model.settings.swipePages!==false){
+    if(p.route==='home'&&!M.edit&&p.source?.item?.type==='stack'&&M.model.settings.widgetStackSwipe!==false){
+      M.changeStack(p.source.uid,dx<0?1:-1);
+      M.gestureSuppressUntil=Date.now()+400;
+    }else if(p.route==='home'&&!M.edit&&M.model.settings.swipePages!==false){
       M.stepPage(dx<0?1:-1);M.gestureSuppressUntil=Date.now()+420;
     }else if(p.route==='folder'&&M.activeFolder){
       M.goFolderPage(M.folderPage+(dx<0?1:-1));

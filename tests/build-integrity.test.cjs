@@ -52,3 +52,12 @@ test('approved artwork is directly bundled in this repository and independent of
   const prep=read('tools/prepare_art.py');
   assert.doesNotMatch(prep,/urllib|urlopen|raw\.githubusercontent|requests\.get/);
 });
+
+test('native host sends modern Android 12+ widget size option updates',()=>{
+  assert.match(java,/updateAppWidgetSize\(new Bundle\(\),Arrays\.asList/);
+  assert.match(java,/new SizeF\(/);
+  assert.match(java,/requestWidgetCatalog\(/);
+  assert.match(java,/requestWidgetPreview\(/);
+  assert.match(java,/getInstalledProviders\(\)/);
+  assert.match(java,/selectWidgetProvider/);
+});

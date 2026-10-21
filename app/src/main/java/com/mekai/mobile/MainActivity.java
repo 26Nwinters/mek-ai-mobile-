@@ -73,6 +73,7 @@ public class MainActivity extends Activity {
     private static final int REQUEST_PICK_WIDGET=932;
     private static final int REQUEST_CONFIG_WIDGET=933;
     private static final int REQUEST_BIND_WIDGET=934;
+    private static final int REQUEST_RECONFIGURE_WIDGET=935;
     private int pendingWidgetId=-1;
     private final Handler widgetCleanupHandler = new Handler(Looper.getMainLooper());
     private final HashMap<Integer,Runnable> widgetCleanupTasks = new HashMap<>();
@@ -514,6 +515,10 @@ public class MainActivity extends Activity {
             }
             return;
         }
+        if(requestCode==REQUEST_RECONFIGURE_WIDGET){
+            callback("window.mekWidgetReconfigured && window.mekWidgetReconfigured()");
+            return;
+        }
         if(requestCode==REQUEST_PICK_WIDGET || requestCode==REQUEST_CONFIG_WIDGET
                 || requestCode==REQUEST_BIND_WIDGET){
             final int id=pendingWidgetId;
@@ -656,6 +661,21 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface public void pickAndroidWidget() {
             runOnUiThread(()->startWidgetPicker());
+        }
+
+        @JavascriptInterface public void reconfigureWidget(int id){
+            if(id<=0 || widgetHost==null)return;
+            runOnUiThread(()->{
+                try{
+                    AppWidgetProviderInfo info=AppWidgetManager.getInstance(MainActivity.this).getAppWidgetInfo(id);
+                    if(info==null || info.configure==null){
+                        callback("window.mekWidgetReconfigured && window.mekWidgetReconfigured()");
+                        return;
+                    }
+                    widgetHost.startAppWidgetConfigureActivityForResult(
+                        MainActivity.this,id,0,REQUEST_RECONFIGURE_WIDGET,null);
+                }catch(Exception e){Log.w(TAG,"Widget configuration failed",e);}
+            });
         }
 
         @JavascriptInterface public void syncWidgetInventory(String json) {

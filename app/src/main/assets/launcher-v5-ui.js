@@ -127,12 +127,13 @@ M.cellDom=function(item,page){
     const hint=document.createElement('div');hint.className='widget-foot';
     hint.textContent='NATIVE CONTENT APPEARS WHEN EDITING IS DONE';
     placeholder.append(heading,title,hint);cell.append(placeholder);
-  }else cell.append(item.type==='widget'?this.widgetDom(item):this.iconDom(item));
+  }else if(item.type==='stack')cell.append(this.stackDom(item));
+  else cell.append(item.type==='widget'?this.widgetDom(item):this.iconDom(item));
   cell.addEventListener('click',e=>{
     if(e.target.closest('.cell-remove,.cell-resize,.add-task-btn,.task-line'))return;
     if(Date.now()<this.gestureSuppressUntil)return;
     if(this.edit){
-      this.selectedWidget=(item.type==='widget'||item.type==='android-widget')?item.id:null;
+      this.selectedWidget=(['widget','android-widget','stack'].includes(item.type))?item.id:null;
       this.renderHome();return;
     }
     this.openItem(item);
@@ -141,7 +142,7 @@ M.cellDom=function(item,page){
   remove.className='cell-remove';remove.textContent='×';remove.title='Remove from Home';
   remove.onclick=e=>{e.stopPropagation();this.mutate(state=>C.removeItem(state,item.id));this.toast('REMOVED FROM HOME');};
   cell.append(remove);
-  if(item.type==='widget'||item.type==='android-widget'){
+  if(['widget','android-widget','stack'].includes(item.type)){
     const resize=document.createElement('button');resize.type='button';
     resize.className='cell-resize';resize.textContent='⤡';resize.title='Drag to resize width and height independently';
     resize.setAttribute('aria-label','Resize '+(item.kind||item.label||'widget'));

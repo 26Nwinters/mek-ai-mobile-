@@ -342,3 +342,33 @@ body.editing .cell-resize{touch-action:none;user-select:none;cursor:nwse-resize}
 .drawer-track.vertical-track>.app-page{min-height:100%;height:calc(100dvh - 265px);flex:0 0 auto;scroll-snap-align:start}
 body[data-view="home"].layout-locked .grid-cell .cell-remove,
 body.layout-locked .cell-resize{display:none!important}
+
+/* Stage 3: MEK-AI companion widget skins and responsive stacks */
+.widget-stack{padding:0;isolation:isolate;touch-action:pan-y;position:relative}
+.widget-stack>.widget-stack-current{flex:1;width:100%;height:100%;min-height:0;border-radius:inherit}
+.widget-stack-indicators{position:absolute;z-index:4;bottom:6px;left:50%;transform:translateX(-50%);display:flex;gap:5px;background:#0e1710bb;border-radius:12px;padding:4px 7px;pointer-events:none}
+.widget-stack-indicators span{height:5px;width:5px;background:#afad89;border-radius:50%}
+.widget-stack-indicators span.current{background:var(--amber);box-shadow:0 0 6px var(--amber);transform:scale(1.35)}
+.widget-tile[data-tint="olive"]{border-color:#9cb782;color:#b9d3aa}
+.widget-tile[data-tint="rust"]{border-color:#b37f61;color:#d8a78b}
+.widget-tile[data-tint="copper"]{border-color:#d7a17d;color:#f3c09e}
+.widget-tile[data-tint="slate"]{border-color:#8b9caa;color:#b2bec9}
+.widget-tile.configured-widget{opacity:var(--widget-opacity,.97);transition:opacity .2s ease}
+.widget-robot[data-mood="sleep"]>img{filter:brightness(.46) sepia(.2) saturate(.7)}
+.widget-robot[data-mood="sleep"] .robot-hint{color:#aab7a3}
+.widget-robot[data-mood="thinking"]>img{transform:translateY(2px) rotate(-1.2deg)}
+.widget-robot[data-mood="happy"]>img{filter:drop-shadow(0 0 17px rgba(246,184,72,.5))}
+.widget-robot[data-mood="happy"] .micro-label{color:#f1cc8b}
+body:not(.reduce-motion) .widget-robot[data-mood="idle"]>img{animation:mek-ambient-bob 6s ease-in-out infinite alternate}
+@keyframes mek-ambient-bob{from{transform:translateY(1px)}to{transform:translateY(-4px)}}
+.widget-clock[data-clock-style="minimal"] .clock-canvas{display:none}
+.widget-clock[data-clock-style="minimal"] .widget-foot{font-size:15px;line-height:1.4;color:#dfba8e;text-transform:uppercase}
+.widget-clock[data-clock-style="minimal"]{justify-content:space-around}
+.provider-widget-group{margin:12px 0;padding:8px;border:1px solid rgba(206,164,113,.24);background:rgba(16,31,22,.58);border-radius:12px}
+.provider-widget-group h3{margin:3px 4px 10px;font:700 11px 'Consolas',monospace;color:var(--amber);word-break:break-word}
+.provider-widget-item{display:flex;width:100%;gap:12px;padding:8px;border-top:1px solid rgba(220,178,122,.17);text-align:left;align-items:center;min-height:75px}
+.native-widget-preview{width:85px;height:58px;border:1px solid rgba(221,180,109,.32);border-radius:9px;background:#29392e;display:grid;place-items:center;color:var(--amber);font:23px Georgia,serif;flex:0 0 85px;overflow:hidden}
+.native-widget-preview img{width:100%;height:100%;object-fit:contain}
+.provider-widget-description{display:flex;flex-direction:column;gap:6px;min-width:0}
+.provider-widget-description strong{font:12px 'Consolas',monospace;color:#ede0ca}
+.provider-widget-description small{font:9px/1.4 'Consolas',monospace;color:var(--muted)}
