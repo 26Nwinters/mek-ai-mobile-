@@ -67,6 +67,20 @@ public class MainActivity extends Activity {
     private FrameLayout stage;
     private AppWidgetHost widgetHost;
     private final HashMap<Integer,AppWidgetHostView> widgetViews = new HashMap<>();
+    // AppWidgetHostViews are Android siblings ABOVE the WebView, not HTML
+    // children. CSS z-index cannot place a folder over them. Block and hide
+    // these native surfaces whenever an HTML dialog or edit mode is active.
+    private boolean nativeWidgetsUiAllowed = true;
+    private void setNativeWidgetLayerActive(boolean allowed) {
+        nativeWidgetsUiAllowed=allowed;
+        if (!allowed) for (AppWidgetHostView view : widgetViews.values()) {
+            view.setVisibility(View.GONE);
+            view.setClickable(false);
+        }
+        // On reopening, wait for an authoritative layout rect sync instead
+        // of reviving stale widgets or letting them steal dialog touches.
+    }
+
     private final HashMap<Integer,String> lastWidgetSizes=new HashMap<>();
     private static final int REQUEST_EXPORT=930;
     private static final int REQUEST_IMPORT=931;
@@ -549,6 +563,13 @@ public class MainActivity extends Activity {
             if(!Double.isFinite(scale)||scale<=0)return;
             JSONArray items=input.optJSONArray("widgets");
             HashSet<Integer> visible=new HashSet<>();
+            if (!nativeWidgetsUiAllowed) {
+                for (AppWidgetHostView view : widgetViews.values()) {
+                    view.setVisibility(View.GONE);
+                    view.setClickable(false);
+                }
+                return;
+            }
             if(items!=null){
                 for(int i=0;i<Math.min(40,items.length());i++){
                     JSONObject item=items.optJSONObject(i);
@@ -565,6 +586,10 @@ public class MainActivity extends Activity {
                         if(info==null)continue;
                         try{
                             hostView=widgetHost.createView(this,id,info);
+                            // The launcher does not impose a card background.
+                            // RemoteViews may still draw the widget provider's
+                            // own intentional background.
+                            hostView.setBackgroundColor(android.graphics.Color.TRANSPARENT);
                             widgetViews.put(id,hostView);
                             stage.addView(hostView);
                         }catch(Exception e){
@@ -579,6 +604,7 @@ public class MainActivity extends Activity {
                     params.topMargin=(int)Math.round(y*scale);
                     hostView.setLayoutParams(params);
                     hostView.setVisibility(View.VISIBLE);
+                    hostView.setClickable(true);
                     float density=getResources().getDisplayMetrics().density;
                     float widthDp=(float)(w*scale/density);
                     float heightDp=(float)(h*scale/density);
@@ -594,7 +620,10 @@ public class MainActivity extends Activity {
                 }
             }
             for(java.util.Map.Entry<Integer,AppWidgetHostView> entry:widgetViews.entrySet()){
-                if(!visible.contains(entry.getKey()))entry.getValue().setVisibility(View.GONE);
+                if(!visible.contains(entry.getKey())) {
+                    entry.getValue().setVisibility(View.GONE);
+                    entry.getValue().setClickable(false);
+                }
             }
         }catch(Exception e){Log.w(TAG,"Native widget layout ignored",e);}
     }
@@ -681,6 +710,10 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void syncWidgetInventory(String json) {
             if(json==null || json.length()>12000)return;
             runOnUiThread(()->reconcileWidgetInventory(json));
+        }
+
+        @JavascriptInterface public void setWidgetLayerActive(boolean allowed) {
+            runOnUiThread(() -> setNativeWidgetLayerActive(allowed));
         }
 
         @JavascriptInterface public void syncWidgetRects(String json) {

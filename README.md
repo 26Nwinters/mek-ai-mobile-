@@ -1,3 +1,32 @@
+# MEK-AI Mobile v0.6.1 — Native widget overlay, transparency and resizing fix
+
+**Release class: Experimental Android beta.** This patch responds to screenshots from the Galaxy S10+ and retains existing layout data from v0.6.0.
+
+## What changed
+
+- **Folders and overlays always get priority over native Android widgets.** `AppWidgetHostView` instances render above the WebView at the Android view-tree level, so the launcher now explicitly hides and disables their touch surfaces when a folder, customization sheet, Home editing mode, or another Home view is active. Closing the overlay requests fresh native widget placement.
+- **No imposed dark green panel behind transparent Android widgets.** The placeholder is transparent outside editing mode. An Android host view also starts with a transparent background. Provider-authored `RemoteViews` backgrounds remain under the provider's control and cannot always be removed by a launcher.
+- **Four optional surfaces:** Transparent, Outline, Subtle Glass, and Dark Industrial Panel. Use a widget's **Appearance** menu to change its launcher frame. Built-in MEK-AI widgets really become transparent; native widget backgrounds drawn by Android widget provider apps may remain.
+- **Three resize handles** after entering Home editing and tapping a widget: ↔ changes only width, ↕ changes only height, and ⤡ changes both. These controls now appear for **native third-party widgets and built-in widget stacks**, not just regular built-in widgets.
+- **Exact cell sizes and no forced aspect ratio:** The Resize screen separately controls width (1 to configured Home columns) and height (1 to configured Home rows), offers wide/tall presets, and explains native provider min/max constraints. Native widgets may prohibit a dimension, so the launcher honors their Android metadata. Nearby icons relocate when possible.
+- **Stack layout bug fixed:** Saved built-in stacks retain their height, width, and surface style correctly after reopening the launcher.
+
+## Quick instructions
+
+1. Long-press an empty Home area to enter edit mode.
+2. Tap the weather, clock, smart-home, or MEK-AI widget you want to change.
+3. Drag ↔, ↕ or ⤡, or tap a handle for exact sizes.
+4. Open **WIDGET APPEARANCE** and choose **TRANSPARENT / NO BACKGROUND** to eliminate the launcher-added frame.
+5. Exit edit mode. Opening a folder or menu should hide native Android widget views so the folder stays clickable.
+
+## Validation
+
+CI runs the launcher model, UI, widget layer, frame and resize regression tests, full Android SDK 36 debug APK build, artifact upload and artwork/release checks. Source and browser simulation cannot prove real Galaxy widget provider behavior, so physical testing remains important.
+
+**APK signing:** Unless `MEK_DEBUG_KEYSTORE_B64` is configured, this is a temporary-key test build, and Android may require uninstalling older builds signed with a different key. **Export your launcher layout before uninstalling.** Samsung One UI Home remains a fallback.
+
+---
+
 # MEK-AI Mobile v0.6.0 — One UI-inspired launcher preview
 
 MEK-AI Mobile is a custom Android Home launcher built around the original MEK-AI robot and overgrown industrial workshop aesthetic. The repository includes self-contained approved artwork.

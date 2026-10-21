@@ -46,6 +46,7 @@ function demo(host,cols,rows){
 }
 M.openSheet=function(kind,options={}){
   this.sheet=kind;this.sheetArgs=options;
+  this.updateNativeWidgetLayer(false);
   $('sheetOverlay').classList.remove('hidden');
   this.scheduleWidgetSync();
   this.renderSheet();
@@ -276,41 +277,52 @@ M.renderSheet=function(){
 
   if(kind==='resize'){
     const located=C.locate(this.model,opts.id);
-    if(!located||!['widget','android-widget'].includes(located.item.type)){this.closeSheet();return;}
-    const item=located.item;
-    help(host,'Adjust width and height separately. Drag the ⤡ corner handle in edit mode for direct scaling. If a widget expands into occupied cells, MEK-AI moves neighboring icons to free space.');
-    if(item.type==='android-widget'&&item.limits){
-      const limits=item.limits;
-      help(host,'ANDROID PROVIDER LIMITS: '+limits.minW+'–'+limits.maxW+
-        ' columns, '+limits.minH+'–'+limits.maxH+' rows. '+
-        (limits.resizeH?'WIDTH RESIZABLE. ':'WIDTH FIXED. ')+
-        (limits.resizeV?'HEIGHT RESIZABLE.':'HEIGHT FIXED.'));
+    if(!located||!['widget','android-widget','stack'].includes(located.item.type)){
+      this.closeSheet();return;
     }
-    stepper(host,'WIDTH','Grid columns',item.w,1,settings.homeCols,value=>{
-      const ok=this.mutate(model=>C.resizeSmart(model,item.id,value,item.h));
-      if(ok===false)this.toast('NOT ENOUGH FREE GRID SPACE');
+    const item=located.item;
+    const cols=settings.homeCols,rows=settings.homeRows;
+    const lim=item.type==='android-widget'&&item.limits?item.limits:null;
+    const minW=lim?lim.minW:1,maxW=lim?lim.maxW:cols;
+    const minH=lim?lim.minH:1,maxH=lim?lim.maxH:rows;
+    const widthEnabled=!lim||lim.resizeH!==false;
+    const heightEnabled=!lim||lim.resizeV!==false;
+    host.append(E('p','sheet-help',
+      'Choose the exact width and height in Home grid cells. Use ↔ for width, ↕ for height, or ⤡ for both. Widgets snap to cells, not fixed aspect ratios.'));
+    const sizeLabel=E('div','grid-summary','CURRENT SIZE  '+item.w+' × '+item.h);
+    host.append(sizeLabel);
+    if(lim)host.append(E('p','sheet-help',
+      'ANDROID PROVIDER: WIDTH '+(widthEnabled?minW+'–'+maxW:'FIXED AT '+item.w)+
+      ' CELLS · HEIGHT '+(heightEnabled?minH+'–'+maxH:'FIXED AT '+item.h)+
+      ' CELLS. A provider may prohibit smaller dimensions.'));
+    const apply=(w,h)=>{
+      const ok=this.mutate(model=>C.resizeSmart(model,item.id,w,h));
+      if(ok===false)this.toast('CANNOT RESIZE: PROVIDER LIMIT OR NO FREE CELLS');
       this.renderSheet();
-    });
-    stepper(host,'HEIGHT','Grid rows',item.h,1,settings.homeRows,value=>{
-      const ok=this.mutate(model=>C.resizeSmart(model,item.id,item.w,value));
-      if(ok===false)this.toast('NOT ENOUGH FREE GRID SPACE');
-      this.renderSheet();
-    });
+    };
+    stepper(host,'WIDTH','Grid columns',item.w,
+      widthEnabled?minW:item.w,widthEnabled?maxW:item.w,
+      value=>apply(value,item.h));
+    stepper(host,'HEIGHT','Grid rows',item.h,
+      heightEnabled?minH:item.h,heightEnabled?maxH:item.h,
+      value=>apply(item.w,value));
     host.append(E('div','picker-section-label','QUICK SIZES · WIDTH × HEIGHT'));
     const presetGrid=E('div','picker-grid');
-    const presets=[[1,1],[2,1],[2,2],[3,2],[4,2],[4,3],[4,4]];
-    for(const [w,h] of presets.filter(([w,h])=>w<=settings.homeCols&&h<=settings.homeRows)){
-      const button=E('button');button.type='button';button.style.minHeight='42px';
-      button.textContent=w+' × '+h;
-      button.onclick=()=>{
-        const ok=this.mutate(model=>C.resizeSmart(model,item.id,w,h));
-        if(!ok)this.toast('NOT ENOUGH FREE GRID SPACE');
-        this.renderSheet();
-      };
+    const presets=[[1,1],[1,2],[1,3],[1,4],[2,1],[2,2],[2,3],[2,4],
+      [3,1],[3,2],[3,3],[3,4],[4,1],[4,2],[4,3],[4,4],[cols,rows]];
+    const seen=new Set();
+    for(const [w,h] of presets){
+      if(seen.has(w+'x'+h)||w>cols||h>rows)continue;
+      seen.add(w+'x'+h);
+      if((widthEnabled?(w<minW||w>maxW):(w!==item.w))||
+         (heightEnabled?(h<minH||h>maxH):(h!==item.h)))continue;
+      const button=E('button',null,w+' × '+h);button.type='button';
+      button.style.minHeight='42px';button.disabled=w===item.w&&h===item.h;
+      button.onclick=()=>apply(w,h);
       presetGrid.append(button);
     }
     host.append(presetGrid);
-    const editWidget=E('button','sheet-primary','◈ WIDGET SETTINGS');
+    const editWidget=E('button','sheet-primary','◈ WIDGET APPEARANCE');
     editWidget.onclick=()=>this.openSheet('widget-config',{id:item.id});
     host.append(editWidget);
     if(item.type==='widget'||item.type==='stack'){

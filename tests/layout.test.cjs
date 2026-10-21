@@ -211,3 +211,40 @@ test('native widget declared resize directions survive JSON storage',()=>{
  assert.equal(Core.resizeSmart(stored,item.id,3,1),false);
  assert.equal(Core.resizeSmart(stored,item.id,2,2),true);
 });
+
+test('native widget frame is transparent by default, customizable, and restored',()=>{
+  const model=Core.defaultState();
+  const widget=Core.addHome(model,{type:'android-widget',id:'native-transparent',nativeId:711,
+    label:'Weather',w:2,h:2});
+  assert.equal(widget.frameStyle,'transparent');
+  widget.frameStyle='outlined';
+  const restored=Core.normalize(model);
+  assert.equal(Core.locate(restored,'native-transparent').item.frameStyle,'outlined');
+});
+
+test('built-in widget stack height is preserved after normalization and resizing',()=>{
+  const model=Core.defaultState();
+  const original=model.pages[0].items.find(i=>i.kind==='clock');
+  assert.ok(Core.addToStack(model,original.id,{type:'widget',kind:'battery',w:2,h:2}));
+  const stack=Core.locate(model,original.id).item;
+  assert.equal(stack.type,'stack');
+  stack.frameStyle='transparent';
+  assert.equal(Core.resizeSmart(model,original.id,3,3),true);
+  const saved=Core.normalize(model);
+  const restored=Core.locate(saved,original.id).item;
+  assert.equal(restored.w,3);
+  assert.equal(restored.h,3);
+  assert.equal(restored.frameStyle,'transparent');
+});
+
+test('native widget resize constraints reject unsupported directions without layout mutation',()=>{
+  const model=Core.defaultState();
+  const wid=Core.addHome(model,{type:'android-widget',nativeId:712,
+    id:'fixed-widget',label:'Clock',w:2,h:2,
+    limits:{minW:2,maxW:2,minH:1,maxH:4,resizeH:false,resizeV:true}});
+  assert.ok(wid);
+  const before=JSON.stringify(model);
+  assert.equal(Core.resizeSmart(model,wid.id,3,2),false);
+  assert.equal(JSON.stringify(model),before);
+  assert.equal(Core.resizeSmart(model,wid.id,2,3),true);
+});

@@ -120,6 +120,9 @@ M.cellDom=function(item,page){
   if(item.type==='android-widget'){
     const placeholder=document.createElement('div');
     placeholder.className='widget-tile native-widget-placeholder';
+    // This is only an editing outline/label, not a forced card behind the
+    // Android provider's RemoteViews.
+    placeholder.dataset.frame=item.frameStyle||'transparent';
     const heading=document.createElement('div');heading.className='widget-overline';
     heading.textContent='ANDROID / LIVE WIDGET';
     const title=document.createElement('div');title.className='widget-title-text';
@@ -143,11 +146,19 @@ M.cellDom=function(item,page){
   remove.onclick=e=>{e.stopPropagation();this.mutate(state=>C.removeItem(state,item.id));this.toast('REMOVED FROM HOME');};
   cell.append(remove);
   if(['widget','android-widget','stack'].includes(item.type)){
-    const resize=document.createElement('button');resize.type='button';
-    resize.className='cell-resize';resize.textContent='⤡';resize.title='Drag to resize width and height independently';
-    resize.setAttribute('aria-label','Resize '+(item.kind||item.label||'widget'));
-    resize.onclick=e=>{e.stopPropagation();this.openSheet('resize',{id:item.id});};
-    cell.append(resize);
+    const name=item.label||item.kind||'widget';
+    const handles=[
+      ['cell-resize-width','↔','Resize width of '+name],
+      ['cell-resize-height','↕','Resize height of '+name],
+      ['cell-resize','⤡','Resize width and height of '+name]
+    ];
+    for(const [cls,glyph,title] of handles){
+      const handle=document.createElement('button');
+      handle.type='button';handle.className=cls;
+      handle.textContent=glyph;handle.title=title;handle.setAttribute('aria-label',title);
+      handle.onclick=e=>{e.stopPropagation();this.openSheet('resize',{id:item.id});};
+      cell.append(handle);
+    }
     if(this.selectedWidget===item.id)cell.classList.add('selected');
   }
   return cell;
@@ -348,13 +359,16 @@ M.findFolder=function(id){
 M.openFolder=function(id){
   const folder=this.findFolder(id);if(!folder)return;
   this.activeFolder=id;this.folderPage=0;
+  this.updateNativeWidgetLayer(false);
   $('folderOverlay').classList.remove('hidden');
   $('folderTitle').value=folder.name||'Folder';
   this.renderFolder();
+  this.scheduleWidgetSync();
 };
 M.closeFolder=function(){
   this.activeFolder=null;
   $('folderOverlay').classList.add('hidden');
+  this.scheduleWidgetSync();
 };
 M.renderFolder=function(){
   if(!this.activeFolder)return;

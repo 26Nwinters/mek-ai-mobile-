@@ -51,14 +51,16 @@ function atStart(x,y,target){
   }
   const mode=M.activeFolder?'folder':M.view;
   const source=sourceFrom(target);
-  const resizeButton=target.closest?.('.cell-resize');
+  const resizeButton=target.closest?.('.cell-resize,.cell-resize-width,.cell-resize-height');
   let resize=null;
   if(resizeButton&&M.edit){
     const cell=resizeButton.closest('.grid-cell');
     const loc=cell&&C.locate(M.model,cell.dataset.uid);
-    if(loc&&loc.kind==='home'&&['widget','android-widget'].includes(loc.item.type)){
+    if(loc&&loc.kind==='home'&&['widget','android-widget','stack'].includes(loc.item.type)){
+      const direction=resizeButton.classList.contains('cell-resize-width')?'width':
+        resizeButton.classList.contains('cell-resize-height')?'height':'both';
       resize={id:loc.item.id,w:loc.item.w,h:loc.item.h,
-        x:loc.item.x,y:loc.item.y,cell,moved:false,
+        x:loc.item.x,y:loc.item.y,cell,moved:false,direction,
         previewW:loc.item.w,previewH:loc.item.h};
     }
   }
@@ -115,8 +117,18 @@ function previewWidgetResize(p,x,y,event){
   const cols=M.model.settings.homeCols,rows=M.model.settings.homeRows;
   const cellWidth=bounds?.width>0?bounds.width/cols:76;
   const cellHeight=bounds?.height>0?bounds.height/rows:92;
-  const w=Math.max(1,Math.min(cols,r.w+Math.round((x-p.x)/cellWidth)));
-  const h=Math.max(1,Math.min(rows,r.h+Math.round((y-p.y)/cellHeight)));
+  const item=C.locate(M.model,r.id)?.item;
+  const lim=item?.type==='android-widget'?item.limits:null;
+  // Resize one axis at a time with ↔ or ↕, or both with ⤡.
+  // Only native widget provider limits restrict the available range.
+  const widthChange=r.direction!=='height'&&(!lim||lim.resizeH!==false);
+  const heightChange=r.direction!=='width'&&(!lim||lim.resizeV!==false);
+  const minW=lim?.minW||1,maxW=lim?.maxW||cols;
+  const minH=lim?.minH||1,maxH=lim?.maxH||rows;
+  const w=widthChange?Math.max(minW,Math.min(maxW,Math.max(1,
+    Math.min(cols,r.w+Math.round((x-p.x)/cellWidth))))):r.w;
+  const h=heightChange?Math.max(minH,Math.min(maxH,Math.max(1,
+    Math.min(rows,r.h+Math.round((y-p.y)/cellHeight))))):r.h;
   r.previewW=w;r.previewH=h;r.moved=r.moved||w!==r.w||h!==r.h;
   r.cell.classList.add('resizing');
   r.cell.dataset.resizeLabel=w+' × '+h;

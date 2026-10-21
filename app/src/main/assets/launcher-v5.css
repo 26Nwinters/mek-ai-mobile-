@@ -376,3 +376,118 @@ body:not(.reduce-motion) .widget-robot[data-mood="idle"]>img{animation:mek-ambie
 .clock-minimal-time{display:none;font:normal clamp(19px,7vw,38px)/1 'Consolas',monospace;color:#efc088;padding:6px 12px}
 .widget-clock[data-clock-style="minimal"] .clock-minimal-time{display:block}
 body.reduce-motion .widget-robot>img{animation:none!important}
+
+/* MEK-AI Mobile v0.6.1 — native widget layers, transparent surfaces,
+   and independently accessible Galaxy-style widget resize grips. */
+
+/* The native host paints Android RemoteViews in a sibling above the WebView.
+   When not editing we must not fake a second opaque widget underneath it.
+   Editing intentionally shows a legible placement outline instead. */
+body:not(.editing) .grid-cell[data-type="android-widget"] .native-widget-placeholder {
+  opacity:1!important;pointer-events:none!important;
+  background:transparent!important;border:0!important;box-shadow:none!important;
+}
+body:not(.editing) .grid-cell[data-type="android-widget"] .native-widget-placeholder > *{
+  opacity:0!important;visibility:hidden!important;
+}
+body:not(.editing) .grid-cell[data-type="android-widget"] .native-widget-placeholder[data-frame="outlined"] {
+  border:1px solid rgba(218,173,104,.5)!important;
+}
+body:not(.editing) .grid-cell[data-type="android-widget"] .native-widget-placeholder[data-frame="minimal"] {
+  background:rgba(25,39,27,.25)!important;
+  border:1px solid rgba(218,173,104,.12)!important;
+}
+body:not(.editing) .grid-cell[data-type="android-widget"] .native-widget-placeholder[data-frame="panel"] {
+  background:linear-gradient(145deg,#354433,#1b2b20)!important;
+  border:1px solid var(--edge)!important;
+}
+body.editing .grid-cell[data-type="android-widget"] .native-widget-placeholder {
+  background: rgba(24,40,29,.86);
+  border: 1px dashed rgba(237,184,105,.75);
+  box-shadow: none;
+}
+body.editing .grid-cell[data-type="android-widget"] .native-widget-placeholder .widget-overline {
+  font-size: 9px;
+}
+/* Surface styling only modifies the launcher frame; provider-owned RemoteViews
+   can still draw their own backgrounds, exactly as on Samsung One UI Home. */
+.widget-tile.configured-widget[data-frame="transparent"],
+.widget-stack[data-frame="transparent"],
+.widget-stack[data-frame="transparent"] > .widget-stack-current {
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+}
+.widget-tile.configured-widget[data-frame="outlined"],
+.widget-stack[data-frame="outlined"],
+.widget-stack[data-frame="outlined"] > .widget-stack-current {
+  background:transparent!important;
+  border:1px solid rgba(218,173,104,.72)!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+}
+.widget-tile.configured-widget[data-frame="minimal"],
+.widget-stack[data-frame="minimal"],
+.widget-stack[data-frame="minimal"] > .widget-stack-current {
+  background:rgba(25,39,27,.32)!important;
+  border:1px solid rgba(235,186,113,.16)!important;
+  box-shadow:none!important;
+  backdrop-filter:blur(2px);
+}
+.widget-tile.configured-widget[data-frame="transparent"].widget-robot::after,
+.widget-tile.configured-widget[data-frame="outlined"].widget-robot::after,
+.widget-stack[data-frame="transparent"] .widget-robot::after,
+.widget-stack[data-frame="outlined"] .widget-robot::after {
+  display:none!important;
+}
+.widget-tile[data-frame="transparent"] :is(.widget-title-text,.widget-big-number,.widget-foot,.widget-overline,.widget-robot-copy),
+.widget-stack[data-frame="transparent"] :is(.widget-title-text,.widget-foot,.widget-overline,.widget-robot-copy) {
+  text-shadow:0 2px 7px #000e;
+}
+.widget-tile.configured-widget[data-frame="transparent"] .widget-stack-indicators,
+.widget-stack[data-frame="transparent"] .widget-stack-indicators {
+  background:rgba(11,20,13,.35);
+}
+
+/* Allow three independent resize gestures: ↔ width, ↕ height, ⤡ both.
+   All three widget types, including actual Android third-party widgets and
+   stacks, receive handles when selected. Previously only built-ins did. */
+body.editing .grid-cell.selected[data-type="widget"] .cell-resize,
+body.editing .grid-cell.selected[data-type="android-widget"] .cell-resize,
+body.editing .grid-cell.selected[data-type="stack"] .cell-resize,
+body.editing .grid-cell.selected[data-type="widget"] .cell-resize-width,
+body.editing .grid-cell.selected[data-type="android-widget"] .cell-resize-width,
+body.editing .grid-cell.selected[data-type="stack"] .cell-resize-width,
+body.editing .grid-cell.selected[data-type="widget"] .cell-resize-height,
+body.editing .grid-cell.selected[data-type="android-widget"] .cell-resize-height,
+body.editing .grid-cell.selected[data-type="stack"] .cell-resize-height {
+  display:grid;place-items:center;
+}
+.grid-cell .cell-resize,.grid-cell .cell-resize-width,.grid-cell .cell-resize-height {
+  position:absolute;z-index:12;
+  width:34px;height:34px;
+  border:1px solid rgba(24,37,24,.75);
+  border-radius:10px;
+  background:#e5b579;color:#122017;
+  font:700 22px/1 Arial,sans-serif;
+  text-align:center;
+  padding:0;
+  touch-action:none;
+  user-select:none;
+  -webkit-user-select:none;
+  box-shadow:0 2px 9px #0009;
+  cursor:grab;
+  display:none;
+}
+.grid-cell .cell-resize{right:-8px;bottom:-8px}
+.grid-cell .cell-resize-width{right:-9px;top:50%;transform:translateY(-50%)}
+.grid-cell .cell-resize-height{bottom:-9px;left:50%;transform:translateX(-50%)}
+.grid-cell.selected{z-index:3}
+.grid-cell.resizing{z-index:8;outline:2px dashed var(--amber);animation:none!important}
+.grid-cell.resizing::after{white-space:nowrap}
+@media (max-width:360px) {
+ .grid-cell .cell-resize,.grid-cell .cell-resize-width,.grid-cell .cell-resize-height{
+  width:32px;height:32px;font-size:20px
+ }
+}

@@ -61,3 +61,28 @@ test('native host sends modern Android 12+ widget size option updates',()=>{
   assert.match(java,/getInstalledProviders\(\)/);
   assert.match(java,/selectWidgetProvider/);
 });
+
+test('v0.6.1 hides Android host views above WebView dialogs and edit mode',()=>{
+  assert.match(java,/void setNativeWidgetLayerActive\(boolean allowed\)/);
+  assert.match(java,/if \(!nativeWidgetsUiAllowed\)/);
+  assert.match(java,/setWidgetLayerActive\(boolean allowed\)/);
+  assert.match(java,/view\.setVisibility\(View\.GONE\)/);
+  assert.match(java,/hostView\.setBackgroundColor\(android\.graphics\.Color\.TRANSPARENT\)/);
+  const js=read('app/src/main/assets/launcher-v5.js');
+  assert.match(js,/canShowNativeWidgets\(\)/);
+  assert.match(js,/setWidgetLayerActive\(allowed\)/);
+  const ui=read('app/src/main/assets/launcher-v5-ui.js');
+  assert.match(ui,/this\.updateNativeWidgetLayer\(false\)/);
+});
+
+test('resizable Android and built-in widgets have three independent handles',()=>{
+  const ui=read('app/src/main/assets/launcher-v5-ui.js');
+  for(const handle of ['cell-resize','cell-resize-width','cell-resize-height'])
+    assert.ok(ui.includes(handle));
+  const css=read('app/src/main/assets/launcher-v5.css');
+  assert.match(css,/\[data-type="android-widget"\] \.cell-resize/);
+  assert.match(css,/native-widget-placeholder\[data-frame="transparent"\]/);
+  const core=read('app/src/main/assets/launcher-core.js');
+  assert.match(core,/out\.frameStyle/);
+  assert.match(core,/\['widget','android-widget','stack'\]\.includes\(item\.type\)\)\?clamp\(item\.h/);
+});

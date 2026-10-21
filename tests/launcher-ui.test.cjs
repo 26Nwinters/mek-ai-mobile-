@@ -12,7 +12,7 @@ async function phone(seed=null){
   w.scrollTo=()=>{};
   w.HTMLElement.prototype.scrollTo=function(arg){this.scrollLeft=typeof arg==='object'?arg.left||0:0;};
   w.HTMLCanvasElement.prototype.getContext=()=>({beginPath(){},arc(){},fill(){},clearRect(){}});
-  const calls={launch:[],system:[],widgets:[],widgetInventories:[],exports:[],imports:0,pickWidget:0,info:[],iconBatches:[]};
+  const calls={launch:[],system:[],widgets:[],widgetInventories:[],widgetLayers:[],exports:[],imports:0,pickWidget:0,info:[],iconBatches:[]};
   const apps=Array.from({length:150},(_,i)=>({name:'Application '+String(i).padStart(3,'0'),pkg:'com.example.app'+i}));
   w.MEK={
     battery:()=>JSON.stringify({percent:37,charging:false}),
@@ -37,7 +37,8 @@ async function phone(seed=null){
     requestWidgetPreview:provider=>w.setTimeout(()=>w.mekNativeWidgetPreview(provider,'data:image/webp;base64,AAAA'),0),
     selectWidgetProvider:provider=>{calls.selectedProvider=provider;},
     syncWidgetRects:data=>calls.widgets.push(JSON.parse(data)),
-    syncWidgetInventory:data=>calls.widgetInventories.push(JSON.parse(data))
+    syncWidgetInventory:data=>calls.widgetInventories.push(JSON.parse(data)),
+    setWidgetLayerActive:allowed=>calls.widgetLayers.push(allowed)
   };
   for(const name of ['launcher-core.js','launcher-v5.js','launcher-v5-ui.js',
     'launcher-v5-sheets.js','launcher-v5-organizer.js','launcher-v6-widgets.js','launcher-v6-companion.js','launcher-v6-folders.js','launcher-v5-gestures.js'])w.eval(read(name));
@@ -625,4 +626,92 @@ test('default Home across many pages does not render hidden widget tiles',async(
  M.goPage(M.model.pages[18].id);
  assert.ok(d.querySelectorAll('.clock-canvas').length<=3);
  dom.window.close();
+});
+
+test('native widgets disappear under folders, sheets, and Home edit, then resume after close',async()=>{
+  const {dom,M,calls}=await phone();await settle();
+  M.nativeWidgetChosen(701,'Test weather',150,110);
+  M.exitEdit();await settle();
+  assert.equal(calls.widgetLayers.at(-1),true);
+  M.mutate(model=>M.Core.addHome(model,{type:'folder',id:'widget-overlay-folder',
+    name:'Social',apps:[{pkg:'com.example.app5',label:'Application 005'}]}));
+  M.openFolder('widget-overlay-folder');
+  assert.equal(M.activeFolder,'widget-overlay-folder');
+  assert.equal(calls.widgetLayers.at(-1),false,
+    'opening an HTML folder must immediately suppress Android host widgets');
+  M.closeFolder();
+  assert.equal(calls.widgetLayers.at(-1),true,
+    'closing the folder makes native widgets eligible to reappear');
+  M.openSheet('widgets');
+  assert.equal(calls.widgetLayers.at(-1),false,'widget gallery should hide native surfaces');
+  M.closeSheet();
+  assert.equal(calls.widgetLayers.at(-1),true);
+  M.enterEdit();
+  assert.equal(calls.widgetLayers.at(-1),false,'editing should hide native touch surfaces');
+  M.exitEdit();
+  assert.equal(calls.widgetLayers.at(-1),true);
+  dom.window.close();
+});
+
+test('native widgets start without a forced card and offer all four frame styles',async()=>{
+  const {dom,M,d}=await phone();
+  M.nativeWidgetChosen(702,'Transparent Clock',140,110);
+  const item=M.model.pages.flatMap(p=>p.items).find(x=>x.nativeId===702);
+  assert.ok(item);
+  assert.equal(item.frameStyle,'transparent');
+  M.renderHome();
+  assert.equal(d.querySelector('.grid-cell[data-uid="'+item.id+'"] .native-widget-placeholder').dataset.frame,'transparent');
+  M.openSheet('widget-config',{id:item.id});
+  const choices=Array.from(d.querySelectorAll('.option-button'));
+  const outlined=choices.find(x=>x.textContent.includes('OUTLINE ONLY'));
+  assert.ok(outlined,'native widgets should offer wrapper styling');
+  outlined.click();
+  const updated=M.Core.locate(M.model,item.id).item;
+  assert.equal(updated.frameStyle,'outlined');
+  assert.equal(M.Core.locate(M.Core.normalize(M.model),item.id).item.frameStyle,'outlined');
+  dom.window.close();
+});
+
+test('built-in transparent surface mode persists and does not remove widget contents',async()=>{
+  const {dom,M,d}=await phone();
+  const robot=M.model.pages[0].items.find(x=>x.kind==='mek');
+  M.openSheet('widget-config',{id:robot.id});
+  const transparent=Array.from(d.querySelectorAll('.option-button'))
+    .find(x=>x.textContent.includes('TRANSPARENT / NO BACKGROUND'));
+  assert.ok(transparent);
+  transparent.click();
+  const item=M.Core.locate(M.model,robot.id).item;
+  assert.equal(item.config.frameStyle,'transparent');
+  const node=M.widgetDom(item);
+  assert.equal(node.dataset.frame,'transparent');
+  assert.ok(node.querySelector('img'),'character image stays visible after removing the panel');
+  dom.window.close();
+});
+
+test('resize controls appear for native widgets and stacks, with separate width/height handles',async()=>{
+  const {dom,M,d}=await phone();
+  M.nativeWidgetChosen(703,'Test Clock',140,110);
+  const native=M.model.pages.flatMap(p=>p.items).find(x=>x.nativeId===703);
+  M.selectedWidget=native.id;M.renderHome();
+  const tile=d.querySelector('.grid-cell[data-uid="'+native.id+'"]');
+  assert.ok(tile.querySelector('.cell-resize'));
+  assert.ok(tile.querySelector('.cell-resize-width'));
+  assert.ok(tile.querySelector('.cell-resize-height'));
+  assert.equal(tile.classList.contains('selected'),true);
+  tile.querySelector('.cell-resize-width').click();
+  assert.equal(M.sheet,'resize');
+  assert.ok(d.querySelector('.stepper'),'separate width and height controls in resize sheet');
+  M.closeSheet();
+  dom.window.close();
+});
+
+test('widget size sheet offers 1-cell wide and tall dimensions without forced aspect ratio',async()=>{
+  const {dom,M,d}=await phone();
+  const clock=M.model.pages[0].items.find(x=>x.kind==='clock');
+  M.openSheet('resize',{id:clock.id});
+  const sizes=Array.from(d.querySelectorAll('.picker-grid button')).map(x=>x.textContent);
+  assert.ok(sizes.some(x=>x.includes('1 × 3')));
+  assert.ok(sizes.some(x=>x.includes('3 × 1')));
+  assert.ok(sizes.some(x=>x.includes('4 × 4')));
+  dom.window.close();
 });

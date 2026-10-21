@@ -58,6 +58,8 @@ function cleanItem(item,cols=4,rows=6,asDock=false){
   }
   if(item.type==='stack'){
     if(asDock)return null;
+    out.frameStyle=['transparent','outlined','panel','minimal'].includes(item.frameStyle)?
+      item.frameStyle:'panel';
     out.stack=(Array.isArray(item.stack)?item.stack:[]).slice(0,10).filter(ch=>ch&&WIDGETS.has(ch.kind)).map(ch=>({id:uid('stack-child'),kind:ch.kind,config:ch.config&&typeof ch.config==='object'?{...ch.config}:{}}));
     if(!out.stack.length)return null;
     out.active=clamp(item.active,0,out.stack.length-1,0);
@@ -67,6 +69,8 @@ function cleanItem(item,cols=4,rows=6,asDock=false){
     out.nativeId=clamp(item.nativeId,1,1000000,-1);
     if(out.nativeId<1)return null;
     out.label=text(item.label||'Android Widget');
+    out.frameStyle=['transparent','outlined','panel','minimal'].includes(item.frameStyle)?
+      item.frameStyle:'transparent';
     if(typeof item.provider==='string')out.provider=text(item.provider,240);
     if(item.limits&&typeof item.limits==='object'){
       out.limits={minW:clamp(item.limits.minW,1,cols,1),minH:clamp(item.limits.minH,1,rows,1),
@@ -88,7 +92,7 @@ function cleanItem(item,cols=4,rows=6,asDock=false){
   if(!asDock){
     out.x=clamp(item.x,0,cols-1,0);out.y=clamp(item.y,0,rows-1,0);
     out.w=(['widget','android-widget','stack'].includes(item.type))?clamp(item.w,1,cols,2):1;
-    out.h=(item.type==='widget'||item.type==='android-widget')?clamp(item.h,1,rows,2):1;
+    out.h=(['widget','android-widget','stack'].includes(item.type))?clamp(item.h,1,rows,2):1;
     out.w=Math.min(out.w,cols-out.x);out.h=Math.min(out.h,rows-out.y);
   }
   return out;

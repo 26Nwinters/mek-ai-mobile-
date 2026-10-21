@@ -10,6 +10,8 @@ const KINDS={
 };
 M.stackDom=function(item){
   const host=E('div','widget-tile widget-stack');host.dataset.stack=item.id;
+  host.dataset.frame=['transparent','outlined','minimal','panel'].includes(item.frameStyle)?
+    item.frameStyle:'panel';
   const children=Array.isArray(item.stack)?item.stack:[];
   const active=children[Math.max(0,Math.min(children.length-1,item.active||0))];
   if(!active)return host;
@@ -56,6 +58,8 @@ M.widgetDom=function(item){
   const tint=['amber','olive','rust','copper','slate'].includes(config.tint)?config.tint:'amber';
   widget.dataset.tint=tint;
   widget.classList.add('configured-widget');
+  widget.dataset.frame=['transparent','outlined','minimal','panel'].includes(config.frameStyle)?
+    config.frameStyle:'panel';
   const alpha=Number(config.opacity);
   if(Number.isFinite(alpha)&&alpha>=.35&&alpha<=1){
     widget.style.setProperty('--widget-opacity',alpha);
@@ -84,11 +88,43 @@ M.widgetDom=function(item){
   }
   return widget;
 };
+M.renderFrameChoices=function(host,loc){
+  const parent=loc.item;
+  const raw=parent.type==='widget'?parent.config?.frameStyle:parent.frameStyle;
+  const selected=['transparent','outlined','minimal','panel'].includes(raw)?raw:
+    parent.type==='android-widget'?'transparent':'panel';
+  host.append(E('div','picker-section-label','WIDGET SURFACE / BACKGROUND'));
+  if(parent.type==='android-widget'){
+    host.append(E('p','sheet-help',
+      'Transparent removes MEK-AI’s backing panel. Backgrounds drawn inside another app’s Android widget are controlled by that app and cannot be removed here.'));
+  }
+  for(const [style,label] of [
+    ['transparent','TRANSPARENT / NO BACKGROUND'],
+    ['outlined','OUTLINE ONLY'],
+    ['minimal','SUBTLE GLASS'],
+    ['panel','DARK INDUSTRIAL PANEL']
+  ]){
+    const button=E('button','option-button'+(selected===style?' selected':''),label);
+    button.onclick=()=>{
+      this.mutate(model=>{
+        const updated=C.locate(model,parent.id)?.item;
+        if(!updated)return false;
+        if(updated.type==='widget'){
+          updated.config={...(updated.config||{}),frameStyle:style};
+        }else updated.frameStyle=style;
+        return true;
+      });
+      this.renderSheet();
+    };
+    host.append(button);
+  }
+};
 M.renderCompanionWidgetSettings=function(host,loc){
   const item=loc.item;
   const current=item.type==='stack'?item.stack[item.active||0]:item;
   const config=current.config||{};
   host.append(E('p','sheet-help','Customize this MEK-AI widget without affecting others on Home.'));
+  this.renderFrameChoices(host,loc);
   const opacity=E('div','options-row'),left=E('span'),slider=E('input');
   left.append(E('b',null,'SURFACE TRANSPARENCY'),E('small',null,'Keep content readable over wallpaper'));
   slider.type='range';slider.min='35';slider.max='100';slider.value=Math.round((config.opacity||.92)*100);
@@ -203,6 +239,7 @@ M.renderSheet=function(){
     if(loc.item.type==='android-widget'){
       const details=E('p','sheet-help','This widget is controlled by its Android application. Use the provider settings where available.');
       host.append(details);
+      this.renderFrameChoices(host,loc);
       const btn=E('button','sheet-primary','OPEN WIDGET CONFIGURATION');
       btn.onclick=()=>{this.closeSheet();this.native()?.reconfigureWidget?.(loc.item.nativeId);};
       host.append(btn);

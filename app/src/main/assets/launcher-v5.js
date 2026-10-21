@@ -113,6 +113,7 @@ const Mek={
     if(route!=='drawer'&&this.selectMode)this.disableLibrarySelection();
     if(route!=='home'&&this.edit&&!options.keepEdit)this.exitEdit();
     this.view=route;
+    this.updateNativeWidgetLayer();
     document.body.dataset.view=route;
     document.querySelectorAll('.screen').forEach(n=>n.classList.toggle('active',n.id==='screen-'+route));
     if(route==='drawer'){
@@ -145,6 +146,7 @@ const Mek={
     }
     if(this.view!=='home')this.setView('home');
     this.edit=true;
+    this.updateNativeWidgetLayer(false);
     document.body.classList.add('editing');
     $('editToolbar').classList.remove('hidden');
     this.renderHome();this.renderDock();
@@ -309,15 +311,40 @@ const Mek={
       document.querySelectorAll('.battery-status').forEach(el=>el.textContent=data.charging?'CHARGING':'ON BATTERY');
     }catch(e){}
   },
+  canShowNativeWidgets(){
+    return this.view==='home'&&!this.edit&&!this.sheet&&!this.activeFolder&&!this.drag&&
+      ['folderOverlay','sheetOverlay','homeSetup'].every(id=>{
+        const overlay=$(id);
+        return !overlay||overlay.classList.contains('hidden');
+      });
+  },
+  updateNativeWidgetLayer(allowed=this.canShowNativeWidgets()){
+    if(this.lastNativeLayerAllowed===allowed)return;
+    this.lastNativeLayerAllowed=allowed;
+    // Re-enable requires a new authoritative position packet, even if the
+    // active Home page matches an earlier cached payload.
+    this.lastWidgetPayload=null;
+    const native=this.native();
+    if(native&&typeof native.setWidgetLayerActive==='function'){
+      try{native.setWidgetLayerActive(allowed);}catch(e){}
+    }
+  },
   scheduleWidgetSync(){
+    // Disable native surfaces before the next frame when the user opens
+    // a folder, editing toolbar or modal. Native host views sit ABOVE the
+    // WebView and otherwise intercept all touches in their bounds.
+    this.updateNativeWidgetLayer();
     clearTimeout(this.nativeWidgetTimer);
-    this.nativeWidgetTimer=setTimeout(()=>this.syncNativeWidgets(),50);
-    if(this.view==='home')setTimeout(()=>this.syncNativeWidgets(),290);
+    this.nativeWidgetTimer=setTimeout(()=>this.syncNativeWidgets(),30);
+    if(this.view==='home'&&this.canShowNativeWidgets()){
+      clearTimeout(this.nativeWidgetFollowup);
+      this.nativeWidgetFollowup=setTimeout(()=>this.syncNativeWidgets(),230);
+    }
   },
   syncNativeWidgets(){
     const native=this.native();if(!native||typeof native.syncWidgetRects!=='function')return;
-    const visible=this.view==='home'&&!this.edit&&!this.sheet&&!this.activeFolder&&
-      $('homeSetup').classList.contains('hidden');
+    const visible=this.canShowNativeWidgets();
+    this.updateNativeWidgetLayer(visible);
     const widgets=[];
     if(visible){
       const page=Core.pageById(this.model,this.model.current);
