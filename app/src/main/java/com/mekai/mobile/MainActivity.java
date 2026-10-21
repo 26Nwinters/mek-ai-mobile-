@@ -1,6 +1,7 @@
 package com.mekai.mobile;
 
 import android.app.Activity;
+import android.app.role.RoleManager;
 import android.os.Bundle;
 import android.os.BatteryManager;
 import android.content.Intent;
@@ -77,7 +78,45 @@ public class MainActivity extends Activity {
         catch (Exception e) { Log.w(TAG, "Could not open activity", e); }
     }
 
+    private boolean isSelectedHome() {
+        try {
+            RoleManager manager = (RoleManager) getSystemService(ROLE_SERVICE);
+            if (manager != null && manager.isRoleAvailable(RoleManager.ROLE_HOME))
+                return manager.isRoleHeld(RoleManager.ROLE_HOME);
+            Intent query = new Intent(Intent.ACTION_MAIN);
+            query.addCategory(Intent.CATEGORY_HOME);
+            ResolveInfo resolved = getPackageManager().resolveActivity(query, PackageManager.MATCH_DEFAULT_ONLY);
+            return resolved != null && resolved.activityInfo != null &&
+                    getPackageName().equals(resolved.activityInfo.packageName);
+        } catch (Exception e) {
+            Log.w(TAG, "Could not check default Home app", e);
+            return false;
+        }
+    }
+
+    private void requestHome() {
+        try {
+            RoleManager manager = (RoleManager) getSystemService(ROLE_SERVICE);
+            if (manager != null && manager.isRoleAvailable(RoleManager.ROLE_HOME)
+                    && !manager.isRoleHeld(RoleManager.ROLE_HOME)) {
+                startActivityForResult(manager.createRequestRoleIntent(RoleManager.ROLE_HOME), 700);
+            } else if (!isSelectedHome()) {
+                safeStart(new Intent(Settings.ACTION_HOME_SETTINGS));
+            }
+        } catch (Exception e) {
+            safeStart(new Intent(Settings.ACTION_HOME_SETTINGS));
+        }
+    }
+
     public class PhoneBridge {
+        @JavascriptInterface public boolean isDefaultHome() {
+            return isSelectedHome();
+        }
+
+        @JavascriptInterface public void requestHomeRole() {
+            runOnUiThread(() -> requestHome());
+        }
+
         @JavascriptInterface public String getApps() {
             JSONArray result = new JSONArray();
             try {
