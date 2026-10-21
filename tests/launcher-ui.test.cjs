@@ -45,7 +45,7 @@ function touch(w,target,type,x,y){
   const e=new w.Event(type,{bubbles:true,cancelable:true});
   const point={clientX:x,clientY:y};
   Object.defineProperties(e,{
-    touches:{value:type==='touchstart'?[point]:[]},
+    touches:{value:type==='touchend'||type==='touchcancel'?[]:[point]},
     changedTouches:{value:[point]}
   });
   target.dispatchEvent(e);
@@ -61,7 +61,7 @@ test('initial screen has editable independent desktop and fixed favorites dock',
   assert.equal(d.querySelectorAll('.home-page').length,1);
   assert.equal(d.querySelectorAll('#dock .dock-slot').length,5);
   assert.deepEqual(Array.from(d.querySelectorAll('#dock .dock-slot')).map(x=>x.dataset.uid),
-    ['dock-phone','dock-messages','dock-browser','dock-camera','']);
+    ['dock-phone','dock-messages','dock-browser','dock-camera',undefined]);
   assert.equal(d.getElementById('systemBattery').textContent,'37%');
   assert.ok(d.querySelector('.widget-robot .widget-robot-copy'), 'The robot caption must overlay the MEK-AI image');
   assert.ok(d.querySelector('.widget-robot>img'), 'Approved robot art is attached to the home widget');
@@ -296,7 +296,7 @@ test('drawer toolbar supports selecting multiple apps and creating a folder in t
   assert.equal(M.model.drawerFolders.length,1);
   assert.ok(M.activeFolder);
   const folder=M.model.drawerFolders[0];
-  assert.deepEqual(folder.apps.map(a=>a.pkg),['com.example.app5','com.example.app6']);
+  assert.deepEqual(Array.from(folder.apps,a=>a.pkg),['com.example.app5','com.example.app6']);
   M.closeFolder();
   assert.equal(M.allDrawerItems().some(a=>a.pkg==='com.example.app5'),false);
   assert.ok(M.allDrawerItems().some(a=>a.id===folder.id));

@@ -16,9 +16,13 @@ let initial=saved&&saved.version===5 ? Core.normalize(saved) :
   Core.migrateLegacy(key=>localStorage.getItem(key));
 // v0.5.3 adds the missing fifth hotseat position once without deleting
 // the four shortcuts chosen by users of the earlier v0.5 APK.
-if(initial.settings.dockSlots===4 && !read('mek_mobile_dock_five_v053',false)){
-  initial.settings.dockSlots=5;
-  initial.dock.push(null);
+if(!read('mek_mobile_dock_five_v053',false)){
+  if(initial.settings.dockSlots===4){
+    initial.settings.dockSlots=5;
+    initial.dock.push(null);
+  }
+  // Mark upgraded even when already at five slots, so a later intentional
+  // choice of four slots remains four on the next app launch.
   store('mek_mobile_dock_five_v053',true);
 }
 const Mek={
