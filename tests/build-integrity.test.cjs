@@ -81,7 +81,9 @@ test('resizable Android and built-in widgets have three independent handles',()=
     assert.ok(ui.includes(handle));
   const css=read('app/src/main/assets/launcher-v5.css');
   assert.match(css,/\[data-type="android-widget"\] \.cell-resize/);
-  assert.match(css,/native-widget-placeholder\[data-frame="transparent"\]/);
+  assert.match(css,/native-widget-placeholder\[data-frame="outlined"\]/);
+  assert.match(css,/native-widget-placeholder \> \*/);
+  assert.match(css,/background:transparent!important/);
   const core=read('app/src/main/assets/launcher-core.js');
   assert.match(core,/out\.frameStyle/);
   assert.match(core,/\['widget','android-widget','stack'\]\.includes\(item\.type\)\)\?clamp\(item\.h/);
