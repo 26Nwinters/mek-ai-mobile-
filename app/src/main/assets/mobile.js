@@ -226,16 +226,13 @@ function setupTileClicks(){
     if(tile)activateTile(tile.dataset.tileId);
   });
   host.addEventListener('keydown',e=>{
-    if(e.key!=='Enter'&&e.key!==' ')return;
-    if(e.target.matches('.home-tile')){
-      e.preventDefault();activateTile(e.target.dataset.tileId);
-    }
-    if(e.altKey && appState.edit && e.target.matches('.home-tile')){
+    if(!e.target.matches('.home-tile'))return;
+    if(appState.edit && e.altKey && (e.key==='ArrowLeft'||e.key==='ArrowRight')){
       e.preventDefault();
-      const id=e.target.dataset.tileId;
-      appState.tiles=model.shift(appState.tiles,id,e.key==='ArrowLeft'?-1:1);
-      saveLayout();renderHome();
+      appState.tiles=model.shift(appState.tiles,e.target.dataset.tileId,e.key==='ArrowLeft'?-1:1);
+      saveLayout();renderHome();return;
     }
+    if(e.key==='Enter'||e.key===' '){e.preventDefault();activateTile(e.target.dataset.tileId);}
   });
 }
 function enterEditMode(goHome=false){
@@ -325,6 +322,12 @@ function setGridColumns(value){
   if(appState.editorKind==='grid'&&!$('editSheet').classList.contains('hidden'))renderEditorBody('grid');
 }
 function openEditor(kind){
+  if(kind==='apps'){
+    closeEditor();
+    appState.pickMode=true;
+    navigate('drawer');
+    return;
+  }
   if(!['widgets','grid','themes','note','new-task'].includes(kind))return;
   appState.editorKind=kind;
   $('editSheet').classList.remove('hidden');
