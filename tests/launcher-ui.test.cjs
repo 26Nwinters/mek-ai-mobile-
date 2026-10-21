@@ -12,14 +12,20 @@ async function phone(seed=null){
   w.scrollTo=()=>{};
   w.HTMLElement.prototype.scrollTo=function(arg){this.scrollLeft=typeof arg==='object'?arg.left||0:0;};
   w.HTMLCanvasElement.prototype.getContext=()=>({beginPath(){},arc(){},fill(){},clearRect(){}});
-  const calls={launch:[],system:[],widgets:[],exports:[],imports:0,pickWidget:0,info:[]};
+  const calls={launch:[],system:[],widgets:[],exports:[],imports:0,pickWidget:0,info:[],iconBatches:[]};
   const apps=Array.from({length:150},(_,i)=>({name:'Application '+String(i).padStart(3,'0'),pkg:'com.example.app'+i}));
   w.MEK={
     battery:()=>JSON.stringify({percent:37,charging:false}),
     isDefaultHome:()=>true,
     requestHomeRole:()=>{},
     requestApps:()=>w.setTimeout(()=>w.mekAppsReady(JSON.stringify(apps)),0),
-    requestAppIcon:pkg=>w.setTimeout(()=>w.mekIconReady(pkg,''),0),
+    requestAppIcon:pkg=>w.setTimeout(()=>w.mekIconReady(pkg,'data:image/webp;base64,AAAA'),0),
+    requestAppIcons:json=>{
+      const batch=JSON.parse(json);calls.iconBatches.push(batch);
+      w.setTimeout(()=>w.mekIconsReady(JSON.stringify(batch.map(pkg=>({
+        pkg,icon:'data:image/webp;base64,AAAA'
+      })))),0);
+    },
     launchApp:pkg=>calls.launch.push(pkg),
     openDefault:kind=>calls.system.push(kind),
     exportLayout:json=>calls.exports.push(json),
@@ -30,7 +36,7 @@ async function phone(seed=null){
     syncWidgetRects:data=>calls.widgets.push(JSON.parse(data))
   };
   for(const name of ['launcher-core.js','launcher-v5.js','launcher-v5-ui.js',
-    'launcher-v5-sheets.js','launcher-v5-gestures.js'])w.eval(read(name));
+    'launcher-v5-sheets.js','launcher-v5-organizer.js','launcher-v5-gestures.js'])w.eval(read(name));
   await new Promise(resolve=>setTimeout(resolve,45));
   if(!w.document.querySelector('.home-page'))w.Mek.install();
   return {dom,w,d:w.document,M:w.Mek,calls};
@@ -53,9 +59,9 @@ const settle=()=>new Promise(resolve=>setTimeout(resolve,80));
 test('initial screen has editable independent desktop and fixed favorites dock',async()=>{
   const {dom,M,d}=await phone();
   assert.equal(d.querySelectorAll('.home-page').length,1);
-  assert.equal(d.querySelectorAll('#dock .dock-slot').length,4);
+  assert.equal(d.querySelectorAll('#dock .dock-slot').length,5);
   assert.deepEqual(Array.from(d.querySelectorAll('#dock .dock-slot')).map(x=>x.dataset.uid),
-    ['dock-phone','dock-messages','dock-browser','dock-camera']);
+    ['dock-phone','dock-messages','dock-browser','dock-camera','']);
   assert.equal(d.getElementById('systemBattery').textContent,'37%');
   assert.ok(d.querySelector('.widget-robot .widget-robot-copy'), 'The robot caption must overlay the MEK-AI image');
   assert.ok(d.querySelector('.widget-robot>img'), 'Approved robot art is attached to the home widget');
@@ -113,16 +119,39 @@ test('long-press edit, widget picker and app chooser add actual app tiles',async
   dom.window.close();
 });
 
-test('the app drawer long-press drag transitions into edit Home and drops application',async()=>{
+test('stationary drawer hold opens Select multiple and Android App Settings options',async()=>{
   const {dom,M,w,d}=await phone();await settle();
   M.setView('drawer');
   const app=Array.from(d.querySelectorAll('.app-page-cell')).find(n=>n.dataset.pkg==='com.example.app2');
   assert.ok(app);
   touch(w,app,'touchstart',160,230);
-  await new Promise(resolve=>setTimeout(resolve,530));
-  assert.equal(M.view,'home');
+  await new Promise(resolve=>setTimeout(resolve,520));
+  assert.equal(M.view,'drawer','holding without movement stays in the library');
+  assert.equal(M.drag,null,'holding without movement does not start dragging');
+  touch(w,app,'touchend',160,230);
+  assert.equal(M.sheet,'app-actions');
+  const texts=Array.from(d.querySelectorAll('.option-button')).map(n=>n.textContent);
+  assert.ok(texts.some(x=>x.includes('SELECT MULTIPLE')));
+  assert.ok(texts.some(x=>x.includes('APP SETTINGS')));
+  d.querySelector('.option-button').click();
+  assert.equal(M.selectMode,true);
+  assert.equal(M.selectedApps.has('com.example.app2'),true);
+  dom.window.close();
+});
+
+test('hold then move a single drawer app upward to Home without multi-select',async()=>{
+  const {dom,M,w,d}=await phone();await settle();
+  M.setView('drawer');
+  const app=Array.from(d.querySelectorAll('.app-page-cell')).find(n=>n.dataset.pkg==='com.example.app2');
+  assert.ok(app);
+  touch(w,app,'touchstart',160,240);
+  await new Promise(resolve=>setTimeout(resolve,520));
+  touch(w,d,'touchmove',160,190);
+  assert.equal(M.view,'drawer','moving within the app library keeps it in the drawer');
   assert.ok(M.drag);
-  touch(w,d,'touchend',160,230);
+  touch(w,d,'touchmove',160,90);
+  assert.equal(M.view,'home','moving toward the top enters Home drag mode');
+  touch(w,d,'touchend',160,90);
   assert.equal(M.drag,null);
   assert.ok(M.model.pages.some(p=>p.items.some(i=>i.pkg==='com.example.app2')));
   dom.window.close();
@@ -248,5 +277,155 @@ test('a fresh Android launcher process restores the chosen default Home page',as
   seed.current=seed.pages[0].id; // Previously viewed page differs from default.
   const {dom,M}=await phone(seed);
   assert.equal(M.model.current,second.id);
+  dom.window.close();
+});
+
+test('drawer toolbar supports selecting multiple apps and creating a folder in the library',async()=>{
+  const {dom,M,d}=await phone();await settle();
+  M.setView('drawer');
+  d.getElementById('drawerSelect').click();
+  assert.equal(M.selectMode,true);
+  const choose=pkg=>d.querySelector('.app-page-cell[data-pkg="'+pkg+'"] .icon-tile').click();
+  choose('com.example.app5');
+  choose('com.example.app6');
+  assert.equal(M.selectedApps.size,2);
+  assert.equal(d.getElementById('drawerSelectedCount').textContent,'2 SELECTED');
+  assert.equal(d.querySelectorAll('.app-page-cell.is-selected').length,2);
+  d.getElementById('drawerSelectionFolder').click();
+  assert.equal(M.selectMode,false);
+  assert.equal(M.model.drawerFolders.length,1);
+  assert.ok(M.activeFolder);
+  const folder=M.model.drawerFolders[0];
+  assert.deepEqual(folder.apps.map(a=>a.pkg),['com.example.app5','com.example.app6']);
+  M.closeFolder();
+  assert.equal(M.allDrawerItems().some(a=>a.pkg==='com.example.app5'),false);
+  assert.ok(M.allDrawerItems().some(a=>a.id===folder.id));
+  dom.window.close();
+});
+
+test('multiple selected library apps can be added to an existing drawer folder',async()=>{
+  const {dom,M,d}=await phone();await settle();
+  M.setView('drawer');
+  M.enableLibrarySelection('com.example.app4');
+  M.createLibraryFolder();
+  const folderId=M.model.drawerFolders[0].id;
+  M.closeFolder();
+  M.enableLibrarySelection('com.example.app7');
+  M.toggleLibrarySelection('com.example.app8');
+  d.getElementById('drawerSelectionAdd').click();
+  assert.equal(M.sheet,'library-target');
+  const target=Array.from(d.querySelectorAll('.option-button')).find(n=>n.textContent.includes('New Folder'));
+  assert.ok(target);
+  target.click();
+  const folder=M.findFolder(folderId);
+  assert.equal(folder.apps.length,3);
+  assert.equal(M.selectMode,false);
+  dom.window.close();
+});
+
+test('individual drawer icon reorder is independent from multi-selection',async()=>{
+  const {dom,M}=await phone();await settle();
+  M.setView('drawer');
+  const items=M.allDrawerItems();
+  const a=items.find(x=>x.pkg==='com.example.app1');
+  const b=items.find(x=>x.pkg==='com.example.app2');
+  assert.ok(a&&b);
+  assert.equal(M.organizeDrawerDrop(a,null),true);
+  assert.equal(M.model.settings.appSort,'custom');
+  assert.equal(M.selectMode,false);
+  assert.equal(M.model.drawerOrder[M.model.drawerOrder.length-1],a.pkg);
+  assert.equal(M.organizeDrawerDrop(a,b),true);
+  const folder=M.model.drawerFolders.find(x=>x.apps.some(z=>z.pkg===a.pkg));
+  assert.ok(folder);
+  assert.equal(folder.apps.length,2);
+  dom.window.close();
+});
+
+test('icon requests batch only rendered packages and fill real image elements',async()=>{
+  const {dom,M,calls,d}=await phone();await settle();
+  M.setView('drawer');
+  await new Promise(resolve=>setTimeout(resolve,260));
+  assert.ok(calls.iconBatches.length>=1,'native icons should be requested in batches');
+  assert.ok(calls.iconBatches.every(batch=>batch.length<=12),'max 12 per batch');
+  assert.ok(calls.iconBatches.length<20,'never send an individual bridge call for every app');
+  assert.ok(d.querySelectorAll('.app-page .app-symbol img').length>0,'real app images replace initial letters');
+  dom.window.close();
+});
+
+test('resizing the MEK-AI robot widget supports narrow and wide proportions',async()=>{
+  const {dom,M,d}=await phone();
+  M.enterEdit();
+  const id=M.model.pages[0].items.find(x=>x.kind==='mek').id;
+  assert.equal(M.Core.resizeSmart(M.model,id,1,3),true);
+  M.renderHome();
+  const widget=d.querySelector('.grid-cell[data-uid="'+id+'"]');
+  assert.equal(widget.dataset.cols,'1');
+  assert.equal(widget.dataset.rows,'3');
+  M.openSheet('resize',{id});
+  const sizes=Array.from(d.querySelectorAll('.picker-grid button'));
+  assert.ok(sizes.some(x=>x.textContent.includes('2 × 2')));
+  dom.window.close();
+});
+
+test('old four-icon user dock gains an empty fifth position without overwriting favorites',async()=>{
+  const C=require('../app/src/main/assets/launcher-core.js');
+  const seed=C.defaultState();
+  seed.settings.dockSlots=4;
+  seed.dock.length=4;
+  const {dom,M,d}=await phone(seed);
+  assert.equal(M.model.settings.dockSlots,5);
+  assert.equal(M.model.dock.length,5);
+  assert.equal(d.querySelectorAll('#dock .dock-slot').length,5);
+  assert.equal(M.model.dock[0].kind,'phone');
+  assert.equal(M.model.dock[4],null);
+  dom.window.close();
+});
+
+test('touch drag in the app drawer moves one icon onto another to create a folder',async()=>{
+  const {dom,w,M,d}=await phone();await settle();
+  M.setView('drawer');
+  const src=d.querySelector('.app-page-cell[data-pkg="com.example.app4"]');
+  const dst=d.querySelector('.app-page-cell[data-pkg="com.example.app5"]');
+  assert.ok(src&&dst);
+  d.elementFromPoint=()=>dst;
+  touch(w,src,'touchstart',200,250);
+  await new Promise(resolve=>setTimeout(resolve,520));
+  touch(w,d,'touchmove',250,300);
+  assert.equal(M.view,'drawer');
+  assert.ok(M.drag);
+  touch(w,d,'touchend',250,300);
+  assert.equal(M.drag,null);
+  const folder=M.model.drawerFolders.find(f=>f.apps.some(a=>a.pkg==='com.example.app4'));
+  assert.ok(folder);
+  assert.equal(folder.apps.length,2);
+  dom.window.close();
+});
+
+test('dragging the widget resize handle changes width and height separately',async()=>{
+  const {dom,M,w,d}=await phone();
+  M.enterEdit();
+  const id=M.model.pages[0].items.find(i=>i.kind==='mek').id;
+  M.selectedWidget=id;M.renderHome();
+  const handle=d.querySelector('.grid-cell[data-uid="'+id+'"] .cell-resize');
+  assert.ok(handle);
+  touch(w,handle,'touchstart',250,300);
+  touch(w,d,'touchmove',85,400);
+  touch(w,d,'touchend',85,400);
+  const item=M.Core.locate(M.model,id)?.item;
+  assert.equal(item.w,2);
+  assert.equal(item.h,3);
+  assert.equal(M.drag,null);
+  dom.window.close();
+});
+
+test('native icon response is cached across drawer page re-renders',async()=>{
+  const {dom,M,calls,d}=await phone();await settle();
+  M.setView('drawer');await new Promise(resolve=>setTimeout(resolve,180));
+  const before=calls.iconBatches.length;
+  const cacheSize=M.iconCache.size;
+  assert.ok(cacheSize>0);
+  M.renderDrawer();await new Promise(resolve=>setTimeout(resolve,120));
+  assert.equal(M.iconCache.size,cacheSize);
+  assert.equal(calls.iconBatches.length,before,'same icons should not be requested again');
   dom.window.close();
 });

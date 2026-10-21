@@ -114,6 +114,7 @@ M.cellDom=function(item,page){
   cell.dataset.type=item.type;
   cell.style.setProperty('--col',item.x+1);cell.style.setProperty('--row',item.y+1);
   cell.style.setProperty('--w',item.w||1);cell.style.setProperty('--h',item.h||1);
+  cell.dataset.cols=item.w||1;cell.dataset.rows=item.h||1;
   cell.setAttribute('role','listitem');
   cell.tabIndex=0;
   if(item.type==='android-widget'){
@@ -142,7 +143,8 @@ M.cellDom=function(item,page){
   cell.append(remove);
   if(item.type==='widget'||item.type==='android-widget'){
     const resize=document.createElement('button');resize.type='button';
-    resize.className='cell-resize';resize.textContent='⤡';resize.title='Resize widget';
+    resize.className='cell-resize';resize.textContent='⤡';resize.title='Drag to resize width and height independently';
+    resize.setAttribute('aria-label','Resize '+(item.kind||item.label||'widget'));
     resize.onclick=e=>{e.stopPropagation();this.openSheet('resize',{id:item.id});};
     cell.append(resize);
     if(this.selectedWidget===item.id)cell.classList.add('selected');
@@ -175,6 +177,7 @@ M.renderHome=function(){
   this.refreshClock();this.refreshBattery();
   this.renderPageDots();
   this.scheduleWidgetSync();
+  this.scheduleIconDrain();
 };
 M.renderPageDots=function(){
   const host=$('homePageDots');if(!host)return;host.textContent='';
@@ -217,11 +220,13 @@ M.renderDock=function(){
     host.append(slot);
   }
   this.applyPrefs();
+  this.scheduleIconDrain();
 };
 M.renderDrawer=function(){
   const host=$('drawerTrack');if(!host)return;
   if(this.view!=='drawer')return;
   const items=this.allDrawerItems();
+  this.drawerSnapshot=items;
   const {appCols:cols,appRows:rows}=this.model.settings;
   const size=cols*rows,pageCount=Math.max(1,Math.ceil(items.length/size));
   this.drawerPage=Math.max(0,Math.min(pageCount-1,this.drawerPage));
@@ -246,8 +251,10 @@ M.renderDrawer=function(){
     dots.append(dot);
   }
   const scroll=$('drawerPages');
-  try{scroll.scrollTo({left:this.drawerPage*(scroll.clientWidth||1),behavior:'instant'});}
+  try{scroll.scrollTo({left:this.drawerPage*(scroll.clientWidth||1),behavior:'auto'});}
   catch(e){scroll.scrollLeft=this.drawerPage*(scroll.clientWidth||1);}
+  this.renderLibrarySelection?.();
+  this.scheduleIconDrain();
 };
 M.populateDrawerPage=function(index){
   const host=$('drawerTrack');
@@ -256,7 +263,7 @@ M.populateDrawerPage=function(index){
   if(page.dataset.loaded==='yes')return;
   page.dataset.loaded='yes';
   const {appCols,appRows}=this.model.settings,size=appCols*appRows;
-  const items=this.allDrawerItems().slice(index*size,(index+1)*size);
+  const items=(this.drawerSnapshot||this.allDrawerItems()).slice(index*size,(index+1)*size);
   for(const item of items){
     const cell=document.createElement('div');
     cell.className='app-page-cell';cell.dataset.loc='drawer';
@@ -265,11 +272,22 @@ M.populateDrawerPage=function(index){
     const icon=this.iconDom(item);
     icon.onclick=e=>{
       if(Date.now()<this.gestureSuppressUntil)return;
+      if(this.selectMode){
+        if(item.type==='app')this.toggleLibrarySelection(item.pkg);
+        else this.toast('ONLY INSTALLED APPS CAN BE SELECTED');
+        return;
+      }
       if(this.edit && this.picking){this.pickApp(item);return;}
       this.openItem(item);
     };
     cell.append(icon);
     page.append(cell);
+    if(this.selectMode&&item.type==='app'){
+      const mark=document.createElement('span');mark.className='selection-mark';
+      mark.textContent=this.selectedApps?.has(item.pkg)?'✓':'';
+      cell.classList.toggle('is-selected',this.selectedApps?.has(item.pkg));
+      cell.append(mark);
+    }
   }
 };
 M.goDrawerPage=function(index){
@@ -282,11 +300,13 @@ M.goDrawerPage=function(index){
   const left=this.drawerPage*(scroller.clientWidth||1);
   try{scroller.scrollTo({left,behavior:'smooth'});}catch(e){scroller.scrollLeft=left;}
   this.updateDrawerDots();
+  this.renderLibrarySelection?.();
+  this.scheduleIconDrain();
 };
 M.changeDrawerPage=function(delta){this.goDrawerPage(this.drawerPage+delta);};
 M.updateDrawerDots=function(){
   document.querySelectorAll('#drawerDots button').forEach((node,i)=>node.classList.toggle('active',i===this.drawerPage));
-  const count=this.allDrawerItems().length;
+  const count=(this.drawerSnapshot||[]).length;
   $('appCount').textContent=count+' APPS / PAGE '+(this.drawerPage+1)+' OF '+Math.max(1,$('drawerTrack').children.length);
 };
 M.findFolder=function(id){
@@ -331,11 +351,13 @@ M.renderFolder=function(){
     dot.onclick=()=>this.goFolderPage(i);dots.append(dot);
   }
   this.goFolderPage(this.folderPage);
+  this.scheduleIconDrain();
 };
 M.goFolderPage=function(index){
   const track=$('folderTrack');if(!track)return;
   this.folderPage=Math.max(0,Math.min(track.children.length-1,Math.round(index)));
   track.style.transform='translate3d(-'+(this.folderPage*100)+'%,0,0)';
+  this.scheduleIconDrain();
   document.querySelectorAll('#folderDots button').forEach((n,i)=>n.classList.toggle('active',i===this.folderPage));
 };
 M.renderSettings=function(){

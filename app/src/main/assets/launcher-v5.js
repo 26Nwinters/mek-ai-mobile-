@@ -14,12 +14,21 @@ function store(key,value){
 const saved=read(KEY,null);
 let initial=saved&&saved.version===5 ? Core.normalize(saved) :
   Core.migrateLegacy(key=>localStorage.getItem(key));
+// v0.5.3 adds the missing fifth hotseat position once without deleting
+// the four shortcuts chosen by users of the earlier v0.5 APK.
+if(initial.settings.dockSlots===4 && !read('mek_mobile_dock_five_v053',false)){
+  initial.settings.dockSlots=5;
+  initial.dock.push(null);
+  store('mek_mobile_dock_five_v053',true);
+}
 const Mek={
   Core,$,KEY,model:initial,
   view:'home',edit:false,drawerPage:0,folderPage:0,
   activeFolder:null,drawerQuery:'',picking:null,sheet:null,
   apps:[],appsLoaded:false,appsLoading:false,lastAppsRequest:0,
   iconCache:new Map(),iconQueue:[],iconPending:new Map(),iconBusy:null,
+  iconInflight:new Set(),iconCooldown:new Map(),iconDrainTimer:null,iconBatchTimer:null,
+  iconBatchCount:0,
   iconObserver:null,history:[],lastToastTimer:null,
   drag:null,gesture:null,gestureSuppressUntil:0,
   selectedWidget:null,drawerIconMenu:null,
@@ -67,6 +76,7 @@ const Mek={
     if(!['home','drawer','assistant','house','settings'].includes(route))route='home';
     if(this.sheet)this.closeSheet();
     if(this.activeFolder)this.closeFolder();
+    if(route!=='drawer'&&this.selectMode)this.disableLibrarySelection();
     if(route!=='home'&&this.edit&&!options.keepEdit)this.exitEdit();
     this.view=route;
     document.body.dataset.view=route;
@@ -182,9 +192,10 @@ const Mek={
         .map(a=>({pkg:a.pkg,label:a.name.slice(0,60),type:'app'}));
       this.apps.sort((a,b)=>a.label.localeCompare(b.label,undefined,{sensitivity:'base'}));
       this.appsLoaded=true;this.appsLoading=false;
-      this.renderDrawer();this.renderDock();
+      if(this.view==='drawer')this.renderDrawer();
       if(this.view==='home')this.renderHome();
-      if(this.sheet==='apps-picker')this.openSheet('apps-picker');
+      if(this.sheet==='apps-picker')this.renderSheet();
+      this.scheduleIconDrain();
     }catch(e){this.appsLoading=false;this.toast('COULD NOT READ INSTALLED APPS');}
   },
   allDrawerItems(){
@@ -275,8 +286,10 @@ const Mek={
         widgets.push({id:item.nativeId,x:rect.left,y:rect.top,w:rect.width,h:rect.height,visible:true});
       }
     }
-    try{native.syncWidgetRects(JSON.stringify({viewportWidth:window.innerWidth,widgets}));}
-    catch(e){}
+    const payload=JSON.stringify({viewportWidth:window.innerWidth,widgets});
+    if(payload===this.lastWidgetPayload)return;
+    this.lastWidgetPayload=payload;
+    try{native.syncWidgetRects(payload);}catch(e){}
   },
   chooseNativeWidget(){
     const native=this.native();
@@ -308,6 +321,8 @@ const Mek={
   },
   appsChanged(){
     this.appsLoaded=false;this.iconCache.clear();
+    this.iconPending.clear();this.iconQueue.length=0;
+    this.iconCooldown.clear();
     this.refreshApps(true);
   },
   refreshGreeting(){
@@ -327,61 +342,114 @@ const Mek={
   },
   refreshNative(){
     this.refreshClock();this.refreshBattery();this.showHomeSetup();
-    if(Date.now()-this.lastAppsRequest>30000)this.refreshApps(true);
+    if(Date.now()-this.lastAppsRequest>300000)this.refreshApps(true);
   },
+  // App icon tiles are created before they're inserted into the DOM.
+  // Queue them, then request only attached icons on the next frame.
   loadIcon(node,pkg){
     if(!node||!Core.packageOk(pkg))return;
     node.dataset.pkg=pkg;
-    if(this.iconCache.has(pkg)){
-      this.putIcon(node,this.iconCache.get(pkg));
-      return;
-    }
-    if(!this.iconPending.has(pkg)){
-      this.iconPending.set(pkg,[]);
-      this.iconQueue.push(pkg);
-    }
-    this.iconPending.get(pkg).push(node);
-    if(this.iconObserver){
-      this.iconObserver.observe(node);
-    }else this.processIcons();
+    const cached=this.iconCache.get(pkg);
+    if(cached){this.putIcon(node,cached);return;}
+    const group=this.iconPending.get(pkg)||new Set();
+    group.add(node);this.iconPending.set(pkg,group);
+    if(!this.iconQueue.includes(pkg)&&!this.iconInflight.has(pkg))this.iconQueue.push(pkg);
+    this.scheduleIconDrain();
   },
-  requestVisibleIcon(node){
-    if(!node||!node.dataset.pkg)return;
-    if(this.iconObserver)this.iconObserver.unobserve(node);
-    this.processIcons();
+  iconIsActive(node){
+    if(!node||!node.isConnected)return false;
+    const screen=node.closest('.screen');
+    if(screen&&!screen.classList.contains('active'))return false;
+    const page=node.closest('.home-page');
+    if(page&&page.dataset.page!==this.model.current)return false;
+    const appPage=node.closest('.app-page');
+    if(appPage&&Math.abs(Number(appPage.dataset.page)-this.drawerPage)>1)return false;
+    const popup=node.closest('.folder-overlay,.sheet-overlay');
+    if(popup&&popup.classList.contains('hidden'))return false;
+    return true;
+  },
+  scheduleIconDrain(){
+    if(this.iconDrainTimer)return;
+    this.iconDrainTimer=setTimeout(()=>{
+      this.iconDrainTimer=null;this.processIcons();
+    },24);
   },
   processIcons(){
-    if(this.iconBusy)return;
-    while(this.iconQueue.length){
+    if(this.iconInflight.size>0)return;
+    const batch=[],delayed=[];
+    while(this.iconQueue.length&&batch.length<12){
       const pkg=this.iconQueue.shift();
-      const connected=(this.iconPending.get(pkg)||[]).some(n=>n.isConnected);
-      if(!connected){this.iconPending.delete(pkg);continue;}
-      this.iconBusy=pkg;
-      try{
-        const bridge=this.native();
-        if(bridge&&typeof bridge.requestAppIcon==='function'){
-          bridge.requestAppIcon(pkg);
-          setTimeout(()=>{if(this.iconBusy===pkg)this.iconReady(pkg,'');},3000);
-        }else this.iconReady(pkg,'');
-      }catch(e){this.iconReady(pkg,'');}
-      break;
+      if(this.iconCache.has(pkg)||this.iconInflight.has(pkg))continue;
+      const set=this.iconPending.get(pkg);
+      if(!set||!set.size)continue;
+      const live=[...set].filter(node=>node.isConnected);
+      if(!live.length){this.iconPending.delete(pkg);continue;}
+      this.iconPending.set(pkg,new Set(live));
+      if(!live.some(node=>this.iconIsActive(node))){delayed.push(pkg);continue;}
+      if(Date.now()<(this.iconCooldown.get(pkg)||0)){delayed.push(pkg);continue;}
+      batch.push(pkg);
     }
+    this.iconQueue.push(...delayed);
+    if(!batch.length)return;
+    batch.forEach(pkg=>this.iconInflight.add(pkg));
+    this.iconBatchCount++;
+    const count=this.iconBatchCount;
+    this.iconBatchTimer=setTimeout(()=>{
+      if(count!==this.iconBatchCount)return;
+      for(const pkg of [...this.iconInflight])this.iconReady(pkg,'');
+    },5500);
+    try{
+      const native=this.native();
+      if(native&&typeof native.requestAppIcons==='function'){
+        native.requestAppIcons(JSON.stringify(batch));
+      }else if(native&&typeof native.requestAppIcon==='function'){
+        for(const pkg of batch)native.requestAppIcon(pkg);
+      }else batch.forEach(pkg=>this.iconReady(pkg,''));
+    }catch(e){batch.forEach(pkg=>this.iconReady(pkg,''));}
+  },
+  iconsReady(payload){
+    try {
+      const values=typeof payload==='string'?JSON.parse(payload):payload;
+      if(!Array.isArray(values))return;
+      for(const entry of values)if(entry&&Core.packageOk(entry.pkg)){
+        this.iconReady(entry.pkg,entry.icon||'');
+      }
+    }catch(e){console.warn('Native icon response was invalid',e);}
+    this.scheduleIconDrain();
   },
   iconReady(pkg,data){
     if(!Core.packageOk(pkg))return;
-    const value=typeof data==='string'?data:'';
-    if(this.iconCache.size>250)this.iconCache.clear();
-    this.iconCache.set(pkg,value);
-    const nodes=this.iconPending.get(pkg)||[];
-    this.iconPending.delete(pkg);
-    nodes.forEach(n=>this.putIcon(n,value));
-    if(this.iconBusy===pkg)this.iconBusy=null;
-    setTimeout(()=>this.processIcons(),0);
+    // A late callback must never overwrite a newer successful icon.
+    const good=typeof data==='string'&&/^data:image\/(?:webp|png);base64,/.test(data);
+    if(good){
+      if(this.iconCache.size>260){
+        const oldest=this.iconCache.keys().next().value;
+        this.iconCache.delete(oldest);
+      }
+      this.iconCache.set(pkg,data);
+      this.iconCooldown.delete(pkg);
+      const nodes=this.iconPending.get(pkg)||new Set();
+      for(const node of nodes)this.putIcon(node,data);
+      this.iconPending.delete(pkg);
+    }else{
+      // Don't cache empty icon responses forever. Keep letter placeholders
+      // and allow a retry later if Android was briefly busy.
+      this.iconPending.delete(pkg);
+      this.iconCooldown.set(pkg,Date.now()+30000);
+    }
+    this.iconInflight.delete(pkg);
+    if(!this.iconInflight.size){
+      clearTimeout(this.iconBatchTimer);
+      this.iconBatchTimer=null;
+      this.scheduleIconDrain();
+    }
   },
   putIcon(node,data){
-    if(!node||!node.isConnected||!data)return;
+    if(!node||!data)return;
+    if(node.querySelector('img'))return;
     node.textContent='';
     const img=document.createElement('img');img.src=data;img.alt='';
+    img.decoding='async';
     node.append(img);
   },
   validateBackup(json){
@@ -422,17 +490,9 @@ const Mek={
     if(Core.pageById(this.model,this.model.settings.homeDefault)){
       this.model.current=this.model.settings.homeDefault;
     }
-    if(typeof IntersectionObserver==='function'){
-      this.iconObserver=new IntersectionObserver(entries=>{
-        let any=false;
-        entries.forEach(entry=>{
-          if(entry.isIntersecting){this.iconObserver.unobserve(entry.target);any=true;}
-        });
-        if(any)this.processIcons();
-      },{rootMargin:'180px'});
-    }
     this.render();
     this.setupControls();
+    this.setupLibraryOrganizer();
     this.installGestures();
     this.refreshClock();this.refreshBattery();
     this.refreshApps();this.showHomeSetup();this.refreshGreeting();
@@ -490,6 +550,7 @@ const Mek={
 window.Mek=Mek;
 window.mekAppsReady=payload=>Mek.appsReady(payload);
 window.mekIconReady=(pkg,data)=>Mek.iconReady(pkg,data);
+window.mekIconsReady=payload=>Mek.iconsReady(payload);
 window.refreshNative=()=>Mek.refreshNative();
 window.goBackInLauncher=()=>Mek.goBack();
 window.mekBackupImported=json=>Mek.backupImported(json);

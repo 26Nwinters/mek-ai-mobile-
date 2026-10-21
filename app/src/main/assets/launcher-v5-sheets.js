@@ -258,17 +258,31 @@ M.renderSheet=function(){
     const located=C.locate(this.model,opts.id);
     if(!located||!['widget','android-widget'].includes(located.item.type)){this.closeSheet();return;}
     const item=located.item;
-    help(host,'Widgets snap to the physical Home grid and cannot overlap other items.');
+    help(host,'Adjust width and height separately. Drag the ⤡ corner handle in edit mode for direct scaling. If a widget expands into occupied cells, MEK-AI moves neighboring icons to free space.');
     stepper(host,'WIDTH','Grid columns',item.w,1,settings.homeCols,value=>{
-      const ok=this.mutate(model=>C.resize(model,item.id,value,item.h));
+      const ok=this.mutate(model=>C.resizeSmart(model,item.id,value,item.h));
       if(ok===false)this.toast('NOT ENOUGH FREE GRID SPACE');
       this.renderSheet();
     });
     stepper(host,'HEIGHT','Grid rows',item.h,1,settings.homeRows,value=>{
-      const ok=this.mutate(model=>C.resize(model,item.id,item.w,value));
+      const ok=this.mutate(model=>C.resizeSmart(model,item.id,item.w,value));
       if(ok===false)this.toast('NOT ENOUGH FREE GRID SPACE');
       this.renderSheet();
     });
+    host.append(E('div','picker-section-label','QUICK SIZES · WIDTH × HEIGHT'));
+    const presetGrid=E('div','picker-grid');
+    const presets=[[1,1],[2,1],[2,2],[3,2],[4,2],[4,3],[4,4]];
+    for(const [w,h] of presets.filter(([w,h])=>w<=settings.homeCols&&h<=settings.homeRows)){
+      const button=E('button');button.type='button';button.style.minHeight='42px';
+      button.textContent=w+' × '+h;
+      button.onclick=()=>{
+        const ok=this.mutate(model=>C.resizeSmart(model,item.id,w,h));
+        if(!ok)this.toast('NOT ENOUGH FREE GRID SPACE');
+        this.renderSheet();
+      };
+      presetGrid.append(button);
+    }
+    host.append(presetGrid);
     return;
   }
 
@@ -413,20 +427,43 @@ M.addToHomeFromDrawer=function(item){
 };
 M.renderAppActions=function(host,opts){
   const item=opts.item;if(!item)return;
-  help(host,'APP / '+(item.label||item.name||'APPLICATION'));
-  opt(host,'OPEN APPLICATION',null,()=>{this.closeSheet();this.openItem(item);});
-  opt(host,'＋ ADD TO HOME',null,()=>{this.closeSheet();this.addToHomeFromDrawer(item);});
-  opt(host,'↓ KEEP IN DOCK',null,()=>{
-    this.picking={type:'dock',slot:this.model.dock.findIndex(x=>x===null)<0?0:this.model.dock.findIndex(x=>x===null)};
-    this.openSheet('dock-select',{slot:this.picking.slot});
+  help(host,'APP LIBRARY / '+(item.label||item.name||'APPLICATION'));
+  if(item.type==='app'){
+    opt(host,'☑ SELECT MULTIPLE APPS','Choose several apps before making a folder or adding them to Home.',()=>{
+      this.closeSheet();this.enableLibrarySelection(item.pkg);
+    });
+  }
+  opt(host,'OPEN '+(item.type==='folder'?'FOLDER':'APPLICATION'),null,()=>{
+    this.closeSheet();this.openItem(item);
+  });
+  opt(host,'＋ ADD TO HOME','Pin this shortcut without removing it from your library.',()=>{
+    this.closeSheet();this.addToHomeFromDrawer(item);
+  });
+  opt(host,'↓ ADD TO THE DOCK',null,()=>{
+    const slot=this.model.dock.findIndex(x=>x===null);
+    if(slot<0){
+      this.toast('DOCK FULL · CHANGE A SLOT IN SETTINGS');
+      this.openSheet('dock');return;
+    }
+    const entry={...item,id:C.uid('favorite')};
+    const added=this.mutate(model=>C.addDock(model,entry,slot));
+    this.closeSheet();
+    if(added)this.toast('ADDED TO FAVORITES');
+    else this.toast('COULD NOT ADD TO DOCK');
   });
   if(item.type==='app'){
-    opt(host,'＋ CREATE APP DRAWER FOLDER',null,()=>{
-      const folder=C.cleanItem({id:C.uid('drawer-folder'),type:'folder',name:'New Folder',
-        apps:[{pkg:item.pkg,label:item.label}]},1,1,true);
+    opt(host,'＋ NEW FOLDER WITH THIS APP','Create a folder inside your app library.',()=>{
+      const folder=C.cleanItem({id:C.uid('drawer-folder'),type:'folder',
+        name:'New Folder',color:'olive',apps:[{pkg:item.pkg,label:item.label}]},1,1,true);
       this.mutate(model=>{model.drawerFolders.push(folder);});
       this.closeSheet();this.openFolder(folder.id);
     });
+    if(this.model.drawerFolders.length){
+      opt(host,'＋ ADD TO AN EXISTING FOLDER',null,()=>{
+        this.closeSheet();this.enableLibrarySelection(item.pkg);
+        this.openSheet('library-target');
+      });
+    }
     if(this.model.settings.appSort==='custom'){
       opt(host,'MOVE TO FIRST APP PAGE',null,()=>{
         const key=item.pkg;
@@ -436,8 +473,23 @@ M.renderAppActions=function(host,opts){
         });this.closeSheet();this.renderDrawer();this.toast('APP MOVED TO FRONT');
       });
     }
-    opt(host,'ANDROID APP INFO',null,()=>{
-      this.closeSheet();try{this.native()?.showAppInfo(item.pkg);}catch(e){this.toast('APP INFO UNAVAILABLE');}
+    opt(host,'⚙ APP SETTINGS / INFO','Android permissions, notifications, storage and uninstall settings.',()=>{
+      this.closeSheet();try{this.native()?.showAppInfo(item.pkg);}
+      catch(e){this.toast('APP INFO UNAVAILABLE');}
+    });
+  }
+  if(item.type==='folder'){
+    opt(host,'✎ RENAME / ORGANIZE FOLDER',null,()=>{
+      this.closeSheet();this.openFolder(item.id);
+    });
+    opt(host,'＋ ADD MORE APPS TO FOLDER',null,()=>{
+      this.closeSheet();this.openFolder(item.id);
+      this.picking={type:'folder',folderId:item.id};
+      this.openSheet('apps-picker');
+    });
+    opt(host,'× DISSOLVE FOLDER','Apps return to the normal app-library pages.',()=>{
+      this.mutate(model=>C.removeLocation(model,item.id));
+      this.closeSheet();this.toast('FOLDER REMOVED · APPS ARE SAFE');
     });
   }
 };

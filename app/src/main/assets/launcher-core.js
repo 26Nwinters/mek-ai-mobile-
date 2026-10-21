@@ -8,7 +8,7 @@
 'use strict';
 const SYSTEM=new Set(['phone','messages','browser','camera','settings','mek','house','music','weather','calendar','files','drawer']);
 const WIDGETS=new Set(['mek','clock','battery','tasks','notes','weather','music','house','calendar']);
-const DEFAULTS={homeCols:4,homeRows:6,appCols:5,appRows:6,folderCols:4,folderRows:4,dockSlots:4,theme:'overgrown',dockStyle:'glass',iconSize:54,labels:true,motion:true,wallpaper:true,appSort:'alphabetical',homeDefault:'home-1',swipeUp:true,swipeDown:true,swipePages:true};
+const DEFAULTS={homeCols:4,homeRows:6,appCols:5,appRows:6,folderCols:4,folderRows:4,dockSlots:5,theme:'overgrown',dockStyle:'glass',iconSize:54,labels:true,motion:true,wallpaper:true,appSort:'alphabetical',homeDefault:'home-1',swipeUp:true,swipeDown:true,swipePages:true};
 let seq=0;
 function uid(prefix='item'){return prefix+'-'+Date.now().toString(36)+'-'+(++seq).toString(36);}
 function clamp(value,min,max,fallback){const n=Number(value);return Number.isFinite(n)?Math.max(min,Math.min(max,Math.round(n))):fallback;}
@@ -29,7 +29,8 @@ function defaultState(){
       {id:'dock-phone',type:'system',kind:'phone',label:'Phone'},
       {id:'dock-messages',type:'system',kind:'messages',label:'Messages'},
       {id:'dock-browser',type:'system',kind:'browser',label:'Browser'},
-      {id:'dock-camera',type:'system',kind:'camera',label:'Camera'}
+      {id:'dock-camera',type:'system',kind:'camera',label:'Camera'},
+      null
     ],
     drawerOrder:[],
     drawerFolders:[],
@@ -106,7 +107,7 @@ function normalize(input){
   s.homeCols=clamp(st.homeCols,3,6,4);s.homeRows=clamp(st.homeRows,4,8,6);
   s.appCols=clamp(st.appCols,4,6,5);s.appRows=clamp(st.appRows,4,8,6);
   s.folderCols=clamp(st.folderCols,3,6,4);s.folderRows=clamp(st.folderRows,3,6,4);
-  s.dockSlots=clamp(st.dockSlots,3,5,4);
+  s.dockSlots=clamp(st.dockSlots,3,5,5);
   s.iconSize=clamp(st.iconSize,36,72,54);
   s.theme=['overgrown','amber','moss'].includes(st.theme)?st.theme:'overgrown';
   s.dockStyle=['glass','metal','none'].includes(st.dockStyle)?st.dockStyle:'glass';
@@ -317,6 +318,37 @@ function resize(model,id,w,h){
   if(!clear(loc.page,candidate,id))return false;
   Object.assign(item,{w:candidate.w,h:candidate.h});return true;
 }
+/* Independently scale widget width and height. If another tile is in the
+   way, move it to a free cell or a new page. All-or-nothing transactional
+   update prevents silently losing anything when the page limit is reached. */
+function resizeSmart(model,id,width,height){
+  const trial=JSON.parse(JSON.stringify(model));
+  const loc=locate(trial,id);
+  if(!loc||loc.kind!=='home'||!['widget','android-widget'].includes(loc.item.type))return false;
+  const cols=trial.settings.homeCols,rows=trial.settings.homeRows;
+  const item=loc.item;
+  const w=clamp(width,1,cols,item.w),h=clamp(height,1,rows,item.h);
+  const candidate={...item,w,h,
+    x:Math.min(item.x,cols-w),y:Math.min(item.y,rows-h)};
+  if(!inside(candidate,cols,rows))return false;
+  const index=trial.pages.indexOf(loc.page);
+  const displaced=loc.page.items.filter(other=>other.id!==id&&overlap(candidate,other));
+  loc.page.items=loc.page.items.filter(other=>other.id===id||!displaced.includes(other));
+  Object.assign(item,{x:candidate.x,y:candidate.y,w,h});
+  for(const other of displaced){
+    const slot=freePosition(loc.page,other,cols,rows);
+    if(slot){Object.assign(other,slot);loc.page.items.push(other);continue;}
+    const destination=firstFit(trial,other,index+1);
+    if(!destination)return false;
+    const page=pageById(trial,destination.pageId);
+    if(!page)return false;
+    page.items.push({...other,x:destination.x,y:destination.y});
+  }
+  // Reassign only after every displaced tile has a safe destination.
+  model.pages=trial.pages;
+  model.current=trial.current;
+  return true;
+}
 function reflow(model){
   const cols=model.settings.homeCols,rows=model.settings.homeRows;
   const original=model.pages.map(p=>({id:p.id,items:p.items.slice()}));
@@ -398,5 +430,5 @@ function migrateLegacy(storage){
 }
 return {DEFAULTS,SYSTEM,WIDGETS,uid,clamp,packageOk,defaultState,normalize,cleanItem,
   inside,overlap,clear,freePosition,pageById,locate,addPage,firstFit,addHome,
-  removeLocation,mergeFolder,moveToHome,addDock,moveToDock,removeItem,resize,reflow,deletePage,reorderPage,migrateLegacy};
+  removeLocation,mergeFolder,moveToHome,addDock,moveToDock,removeItem,resize,resizeSmart,reflow,deletePage,reorderPage,migrateLegacy};
 });

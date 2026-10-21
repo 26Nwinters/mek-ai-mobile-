@@ -36,10 +36,23 @@
           <button id="closeDrawer" class="icon-button" aria-label="Close app drawer">⌄</button>
         </div>
         <label class="app-search"><span>⌕</span><input id="appSearch" autocomplete="off" type="search" placeholder="Search your apps" aria-label="Search installed applications"/></label>
-        <div class="drawer-meta"><span id="appCount">DISCOVERING APPS</span><span>SWIPE ↔</span></div>
+        <div class="drawer-meta">
+          <span id="appCount">DISCOVERING APPS</span>
+          <div class="drawer-action-buttons">
+            <button id="drawerCreateFolder" type="button">＋ FOLDER</button>
+            <button id="drawerSelect" type="button">SELECT</button>
+          </div>
+        </div>
+        <div id="drawerSelectionBar" class="drawer-selection-bar hidden" aria-label="Selected app controls">
+          <span id="drawerSelectedCount">0 SELECTED</span>
+          <button id="drawerSelectionFolder" type="button">＋ FOLDER</button>
+          <button id="drawerSelectionAdd" type="button">ADD TO…</button>
+          <button id="drawerSelectionHome" type="button">HOME</button>
+          <button id="drawerSelectionCancel" type="button">DONE</button>
+        </div>
         <div id="drawerPages" class="drawer-pages" aria-label="Horizontally paged installed apps"><div id="drawerTrack" class="drawer-track"></div></div>
         <div id="drawerDots" class="drawer-dots" aria-label="Application page dots"></div>
-        <div class="drawer-footer">SWIPE DOWN TO GO HOME <span>⌄</span></div>
+        <div class="drawer-footer">HOLD FOR OPTIONS · MOVE TO DRAG · SWIPE DOWN ⌄</div>
       </section>
 
       <section class="screen sub-screen" id="screen-assistant" aria-label="MEK-AI companion">
@@ -94,7 +107,7 @@
           <button data-action="home"><span>DEFAULT HOME APP<small>Switch between Samsung and MEK-AI</small></span><b>↗</b></button>
           <button data-action="settings"><span>ANDROID SETTINGS<small>Open your system settings</small></span><b>↗</b></button>
         </div>
-        <div class="settings-note">MEK-AI MOBILE v0.5.0 · A CUSTOM HOME LAUNCHER, NOT AN ANDROID ROM.</div>
+        <div class="settings-note">MEK-AI MOBILE v0.5.3 · A CUSTOM HOME LAUNCHER, NOT AN ANDROID ROM.</div>
       </section>
     </main>
 
@@ -146,6 +159,7 @@
   <script src="launcher-v5.js"></script>
   <script src="launcher-v5-ui.js"></script>
   <script src="launcher-v5-sheets.js"></script>
+  <script src="launcher-v5-organizer.js"></script>
   <script src="launcher-v5-gestures.js"></script>
 </body>
 </html>

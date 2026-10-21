@@ -2,7 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const Core=require('../app/src/main/assets/launcher-core.js');
 
-test('defaults represent familiar Samsung grids and a four-slot persistent dock',()=>{
+test('defaults represent familiar Samsung grids and a five-slot persistent dock',()=>{
   const state=Core.defaultState();
   assert.equal(state.settings.homeCols,4);
   assert.equal(state.settings.homeRows,6);
@@ -10,8 +10,8 @@ test('defaults represent familiar Samsung grids and a four-slot persistent dock'
   assert.equal(state.settings.appRows,6);
   assert.equal(state.settings.folderCols,4);
   assert.equal(state.settings.folderRows,4);
-  assert.equal(state.dock.length,4);
-  assert.deepEqual(state.dock.map(x=>x.kind),['phone','messages','browser','camera']);
+  assert.equal(state.dock.length,5);
+  assert.deepEqual(state.dock.map(x=>x&&x.kind),['phone','messages','browser','camera',null]);
   assert.equal(state.pages.length,1);
 });
 
@@ -126,4 +126,48 @@ test('state normalization preserves and clamps home, app, folder and dock prefer
   assert.equal(s.folderRows,3);
   assert.equal(s.dockSlots,5);
   assert.equal(s.swipeUp,false);
+});
+
+test('five favorites survive serialization and old four-favorite layouts expand safely',()=>{
+  const v5=Core.defaultState();
+  v5.settings.dockSlots=4;
+  v5.dock.length=4;
+  const old=Core.normalize(v5);
+  assert.equal(old.dock.length,4);
+  old.settings.dockSlots=5;old.dock.push(null);
+  const migrated=Core.normalize(old);
+  assert.equal(migrated.dock.length,5);
+  assert.deepEqual(migrated.dock.slice(0,4).map(x=>x.kind),['phone','messages','browser','camera']);
+  assert.equal(migrated.dock[4],null);
+});
+
+test('smart widget scaling moves neighboring tiles rather than rejecting all expansion',()=>{
+  const state=Core.defaultState();
+  const before=state.pages.flatMap(page=>page.items).map(item=>item.id).sort();
+  const widget=state.pages[0].items.find(item=>item.kind==='battery');
+  assert.ok(widget);
+  const done=Core.resizeSmart(state,widget.id,4,3);
+  assert.equal(done,true);
+  const after=state.pages.flatMap(page=>page.items).map(item=>item.id).sort();
+  assert.deepEqual(after,before,'resizing preserves every existing tile');
+  const resized=Core.locate(state,widget.id).item;
+  assert.equal(resized.w,4);
+  assert.equal(resized.h,3);
+  for(const page of state.pages){
+    for(const item of page.items){
+      assert.ok(Core.inside(item,state.settings.homeCols,state.settings.homeRows));
+      assert.equal(page.items.filter(other=>other.id!==item.id&&Core.overlap(item,other)).length,0);
+    }
+  }
+});
+
+test('smart widget dimensions independently support narrow and tall proportions',()=>{
+  const state=Core.defaultState();
+  const widget=state.pages[0].items.find(item=>item.kind==='clock');
+  assert.equal(Core.resizeSmart(state,widget.id,1,4),true);
+  let item=Core.locate(state,widget.id).item;
+  assert.equal(item.w,1);assert.equal(item.h,4);
+  assert.equal(Core.resizeSmart(state,widget.id,4,1),true);
+  item=Core.locate(state,widget.id).item;
+  assert.equal(item.w,4);assert.equal(item.h,1);
 });

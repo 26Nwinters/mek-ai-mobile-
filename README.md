@@ -1,3 +1,18 @@
+# MEK-AI Mobile v0.5.3 — Galaxy-like app organization and performance update
+
+This release responds to real Galaxy S10+ testing of the v0.5 launcher.
+
+- **Five-slot dock** by default; migrates an existing v0.5 four-slot dock by appending an empty slot and preserving all four favorites.
+- **Fast real app icons:** Android decodes 68px WebP icons off the UI thread and returns batches of up to 12 in one bridge call. JavaScript waits for tiles to be attached before requesting images, caches successfully decoded icons, prioritizes visible Home/drawer pages, and retries failures rather than caching missing icons forever. App discovery on resume is throttled.
+- **App-library organization:** New Folder and Select controls inside the drawer. Select multiple installed apps and create a drawer folder, add them to an existing drawer folder, or pin them all to Home. Folders persist, open, rename, accept new apps and can be dissolved without uninstalling applications.
+- **One-app drag behavior:** A stationary long-press opens app actions with Select Multiple and Android App Settings. A held icon only starts moving after your finger moves; drop inside the drawer to reorder one icon, drop onto another icon to make a folder, or drag upward toward Home to pin it there.
+- **Widgets scale independently:** Drag the lower-right resize handle while editing, or choose width and height in grid cells in the Resize sheet. Neighboring Home icons relocate safely as a widget grows. Both built-in and native Android widgets can be resized, with responsive layouts for narrow/short widgets.
+- All actions have Node model and jsdom simulated phone regression tests before the Android APK is compiled.
+
+**Important:** This update is an experimental Android launcher, not replacement firmware. Real Galaxy S10+ touch and rendering performance still require validation. Keep Samsung One UI Home installed. Prior debug-signed builds may be incompatible for in-place updates unless the same signing keystore was used; export your v0.5 layout before uninstalling.
+
+---
+
 # MEK-AI Mobile v0.5.2 — Android launcher rebuild and default Home restoration
 
 **MEK-AI Mobile is a real Android HOME launcher, not a replacement ROM.** This experimental build targets Android 12+, including the Galaxy S10+. It uses original MEK-AI robot and overgrown workshop artwork.

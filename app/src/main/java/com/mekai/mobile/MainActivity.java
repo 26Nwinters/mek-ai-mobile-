@@ -65,7 +65,7 @@ public class MainActivity extends Activity {
     private final java.util.concurrent.ExecutorService appExecutor =
         java.util.concurrent.Executors.newSingleThreadExecutor();
     private final android.util.LruCache<String,String> iconCache =
-        new android.util.LruCache<>(100);
+        new android.util.LruCache<>(260);
     private static final String TAG = "MEKMobile";
     private static final String HOME = "file:///android_asset/index.html";
 
@@ -449,6 +449,43 @@ public class MainActivity extends Activity {
 
         /* Icon decoding stays off the WebView bridge's synchronous call path.
            A single worker processes requests, then notifies JavaScript on the UI thread. */
+        /* Batch small groups of installed app icons in one background task.
+           This avoids a UI-thread bridge roundtrip for every icon and allows
+           the app drawer to feel responsive with 100+ installed packages. */
+        @JavascriptInterface public void requestAppIcons(String json) {
+            if(json==null || json.length()>5000)return;
+            final ArrayList<String> packages=new ArrayList<>();
+            try {
+                JSONArray requested=new JSONArray(json);
+                HashSet<String> unique=new HashSet<>();
+                for(int i=0;i<Math.min(16,requested.length());i++){
+                    String pkg=requested.optString(i,"");
+                    if(pkg.matches("[a-zA-Z0-9_.]{3,180}") && unique.add(pkg))
+                        packages.add(pkg);
+                }
+            }catch(Exception e){return;}
+            if(packages.isEmpty())return;
+            appExecutor.execute(()->{
+                JSONArray results=new JSONArray();
+                for(String pkg:packages){
+                    try {
+                        JSONObject item=new JSONObject();
+                        item.put("pkg",pkg);
+                        item.put("icon",getAppIcon(pkg));
+                        results.put(item);
+                    }catch(Exception ignored){}
+                }
+                String payload=results.toString();
+                runOnUiThread(()->{
+                    if(web!=null){
+                        web.evaluateJavascript(
+                            "window.mekIconsReady && window.mekIconsReady("+
+                            JSONObject.quote(payload)+")",null);
+                    }
+                });
+            });
+        }
+
         @JavascriptInterface public void requestAppIcon(String pkg) {
             if (pkg == null || !pkg.matches("[a-zA-Z0-9_.]{3,180}")) return;
             appExecutor.execute(() -> {
@@ -482,14 +519,21 @@ public class MainActivity extends Activity {
         }
 
         private String iconData(Drawable drawable) {
-            Bitmap image = Bitmap.createBitmap(84, 84, Bitmap.Config.ARGB_8888);
-            Canvas canvas = new Canvas(image);
-            drawable.setBounds(0, 0, 84, 84);
-            drawable.draw(canvas);
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            image.compress(Bitmap.CompressFormat.PNG, 90, bytes);
-            image.recycle();
-            return "data:image/png;base64," + Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP);
+            // Smaller WebP icons transfer ~3–8× less data than the old 84px
+            // PNG assets, with more than enough detail for a phone dock.
+            final int side=68;
+            Bitmap bitmap=Bitmap.createBitmap(side,side,Bitmap.Config.ARGB_8888);
+            ByteArrayOutputStream output=new ByteArrayOutputStream();
+            try {
+                Canvas canvas=new Canvas(bitmap);
+                drawable.setBounds(0,0,side,side);
+                drawable.draw(canvas);
+                bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY,82,output);
+                return "data:image/webp;base64,"+
+                    Base64.encodeToString(output.toByteArray(),Base64.NO_WRAP);
+            } finally {
+                bitmap.recycle();
+            }
         }
 
         @JavascriptInterface public void launchApp(String pkg) {

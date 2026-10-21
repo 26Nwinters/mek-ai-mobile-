@@ -43,17 +43,30 @@ function sourceTouchesDisabled(target){
 function atStart(x,y,target){
   clearTimer();clearEdge();
   if(!validScene()||sourceTouchesDisabled(target))return;
-  let mode=M.view;
-  if(M.activeFolder)mode='folder';
+  const mode=M.activeFolder?'folder':M.view;
   const source=sourceFrom(target);
-  press={x,y,lastX:x,lastY:y,when:Date.now(),route:mode,source,
-    moved:false,longPressed:false,scrollStart:$('drawerPages')?.scrollLeft||0};
-  if(source && ['home','dock','drawer','folder'].includes(source.loc)){
+  const resizeButton=target.closest?.('.cell-resize');
+  let resize=null;
+  if(resizeButton&&M.edit){
+    const cell=resizeButton.closest('.grid-cell');
+    const loc=cell&&C.locate(M.model,cell.dataset.uid);
+    if(loc&&loc.kind==='home'&&['widget','android-widget'].includes(loc.item.type)){
+      resize={id:loc.item.id,w:loc.item.w,h:loc.item.h,
+        x:loc.item.x,y:loc.item.y,cell,moved:false,
+        previewW:loc.item.w,previewH:loc.item.h};
+    }
+  }
+  press={x,y,lastX:x,lastY:y,when:Date.now(),route:mode,source,resize,
+    moved:false,longPressed:false,armed:false,scrollStart:$('drawerPages')?.scrollLeft||0};
+  if(resize)return;
+  if(source&&['home','dock','drawer','folder'].includes(source.loc)){
     holdTimer=setTimeout(()=>{
       holdTimer=null;
       if(!press||press.moved)return;
-      press.longPressed=true;
-      beginDrag(press,x,y);
+      press.longPressed=true;press.armed=true;
+      source.container?.classList.add('held-item');
+      M.gestureSuppressUntil=Date.now()+500;
+      if(navigator.vibrate)try{navigator.vibrate(9);}catch(e){}
     },HOLD_MS);
   }else if(mode==='home'&&!M.edit){
     holdTimer=setTimeout(()=>{
@@ -68,72 +81,94 @@ function atStart(x,y,target){
 }
 function beginDrag(p,x,y){
   const source=p.source;if(!source||M.drag)return;
-  // Normal Android behavior: holding an icon in the app drawer lifts it
-  // onto the Home desktop. No button or intermediate tab is needed.
-  if(source.loc==='drawer'){
-    if(source.item.type==='folder'){
-      // Folders in app archive can also be pinned as a Home shortcut.
-      M.setView('home');M.enterEdit();
-    }else{M.setView('home');M.enterEdit();}
-  }else if(source.loc==='folder'){
+  source.container?.classList.remove('held-item');
+  // A lifted drawer icon stays in the drawer until it is dragged upward
+  // toward Home. Dropping on another library app creates a folder; dropping
+  // between icons changes just this icon's ordering.
+  if(source.loc==='folder'){
     M.closeFolder();M.setView('home');M.enterEdit();
-  }else if(!M.edit)M.enterEdit();
+  }else if(source.loc!=='drawer'&&!M.edit)M.enterEdit();
   const ghost=$('dragGhost');
   ghost.textContent='';
   ghost.append(M.iconDom(source.item,{noLabel:false}));
   ghost.classList.remove('hidden');
-  M.drag={source,item:{...source.item},startX:p.x,startY:p.y,x,y,moved:false,target:null};
+  M.drag={source,item:{...source.item},startX:p.x,startY:p.y,x,y,moved:true,target:null};
   ghost.style.left=x+'px';ghost.style.top=y+'px';
   M.gestureSuppressUntil=Date.now()+1100;
-  // Rerender during edit creates new nodes; identify original by ID.
   document.querySelectorAll('[data-uid]').forEach(node=>{
     if(node.dataset.uid===source.uid)node.classList.add('drag-origin');
   });
   if(navigator.vibrate)try{navigator.vibrate(12);}catch(e){}
 }
+function previewWidgetResize(p,x,y,event){
+  const r=p.resize;if(!r)return;
+  if(event?.cancelable)event.preventDefault();
+  const page=r.cell.closest('.home-page');
+  const bounds=page?.getBoundingClientRect();
+  const cols=M.model.settings.homeCols,rows=M.model.settings.homeRows;
+  const cellWidth=bounds?.width>0?bounds.width/cols:76;
+  const cellHeight=bounds?.height>0?bounds.height/rows:92;
+  const w=Math.max(1,Math.min(cols,r.w+Math.round((x-p.x)/cellWidth)));
+  const h=Math.max(1,Math.min(rows,r.h+Math.round((y-p.y)/cellHeight)));
+  r.previewW=w;r.previewH=h;r.moved=r.moved||w!==r.w||h!==r.h;
+  r.cell.classList.add('resizing');
+  r.cell.dataset.resizeLabel=w+' × '+h;
+  r.cell.style.setProperty('--w',Math.min(cols-r.x,w));
+  r.cell.style.setProperty('--h',Math.min(rows-r.y,h));
+  M.gestureSuppressUntil=Date.now()+600;
+}
 function move(x,y,event){
   if(!press)return;
   press.lastX=x;press.lastY=y;
+  if(press.resize){previewWidgetResize(press,x,y,event);return;}
   const delta=Math.hypot(x-press.x,y-press.y);
-  if(delta>MOVE_TOLERANCE){
+  if(press.armed&&!M.drag&&delta>15)beginDrag(press,x,y);
+  if(delta>MOVE_TOLERANCE&&!press.armed){
     press.moved=true;
     clearTimer();
   }
   if(!M.drag)return;
   M.drag.x=x;M.drag.y=y;
-  M.drag.moved=M.drag.moved||delta>12;
+  M.drag.moved=true;
   if(event&&event.cancelable)event.preventDefault();
   const ghost=$('dragGhost');ghost.style.left=x+'px';ghost.style.top=y+'px';
+  // Dragging upward out of the app archive exposes the actual Home grid.
+  if(M.drag.source.loc==='drawer'&&M.view==='drawer'&&y<135){
+    M.setView('home');M.enterEdit();
+    M.gestureSuppressUntil=Date.now()+950;
+  }
   highlightTarget(x,y);
   maybeSwitchPage(x);
 }
 function maybeSwitchPage(x){
-  if(!M.drag || M.view!=='home'){clearEdge();return;}
-  const width=$('launcherShell').getBoundingClientRect().width;
+  if(!M.drag||!['home','drawer'].includes(M.view)){clearEdge();return;}
+  const width=$('launcherShell').getBoundingClientRect().width||window.innerWidth;
   const side=x<32?-1:x>width-32?1:0;
   if(side===edgeDirection)return;
   clearEdge();edgeDirection=side;
   if(!side)return;
   edgeTimer=setTimeout(()=>{
     if(!M.drag)return;
-    const current=M.model.pages.findIndex(p=>p.id===M.model.current);
-    const next=current+edgeDirection;
-    if(next>=0&&next<M.model.pages.length){
-      M.goPage(M.model.pages[next].id);
-      M.toast('HOME PAGE '+(next+1));
-    }else if(next===M.model.pages.length&&M.model.pages.length<32){
-      M.mutate(model=>{const page=C.addPage(model,model.current);if(page)model.current=page.id;});
-      M.goPage(M.model.current);
-      M.toast('NEW HOME PAGE');
+    if(M.view==='drawer'){
+      M.changeDrawerPage(edgeDirection);
+    }else{
+      const current=M.model.pages.findIndex(p=>p.id===M.model.current);
+      const next=current+edgeDirection;
+      if(next>=0&&next<M.model.pages.length){
+        M.goPage(M.model.pages[next].id);
+      }else if(next===M.model.pages.length&&M.model.pages.length<32){
+        M.mutate(model=>{const page=C.addPage(model,model.current);if(page)model.current=page.id;});
+        M.goPage(M.model.current);
+      }
     }
     clearEdge();
-  },660);
+  },670);
 }
 function highlightTarget(x,y){
   document.querySelectorAll('.drop-candidate').forEach(n=>n.classList.remove('drop-candidate'));
   const el=document.elementFromPoint?.(x,y);
   const target=el&&el.closest('[data-loc]');
-  if(target && (target.dataset.loc==='home'||target.dataset.loc==='dock')){
+  if(target&&['home','dock','drawer'].includes(target.dataset.loc)){
     target.classList.add('drop-candidate');
     M.drag.target=target;
   }else M.drag.target=null;
@@ -200,43 +235,55 @@ function finalizeDrag(x,y){
   clearEdge();
   const dragging=M.drag;if(!dragging)return;
   const {source,item}=dragging;
-  const dock=dockIndex(x,y);
-  const home=homePoint(x,y);
   let completed=false;
-  if(dock!==null){
-    completed=dropOnDock(item,source,dock);
-    if(completed)M.toast('FAVORITES UPDATED');
-  }else if(home){
-    completed=dropOnHome(item,source,home.pageId,home.x,home.y);
-    if(completed)M.toast('HOME SCREEN UPDATED');
-  }
-  if(!completed&&source.loc==='drawer'){
-    // If the app was picked up but not dropped on a cell, still add to Home.
-    const added=M.mutate(model=>C.addHome(model,{...item,id:C.uid('home'),x:0,y:0,w:1,h:1},model.current));
-    if(added){completed=true;M.toast('APP ADDED TO HOME');}
-  }
-  if(!completed&&source.loc==='folder'){
-    const added=M.mutate(model=>C.addHome(model,{...item,id:C.uid('home'),x:0,y:0,w:1,h:1},model.current));
-    if(added){
-      const folder=M.findFolder(source.folderId);
-      if(folder)M.mutate(()=>{folder.apps=folder.apps.filter(a=>a.pkg!==item.pkg);});
-      completed=true;M.toast('MOVED APP TO HOME');
+  if(source.loc==='drawer'&&M.view==='drawer'){
+    // Drag an individual app within the library. A drop on another app
+    // creates a folder; a drop elsewhere moves only this app's position.
+    const target=dragging.target||document.elementFromPoint?.(x,y)?.closest?.('[data-loc="drawer"]');
+    let destination=null;
+    if(target?.dataset.loc==='drawer'){
+      const pkg=target.dataset.pkg;
+      const id=target.dataset.uid;
+      destination=pkg?M.apps.find(a=>a.pkg===pkg):M.drawerSnapshot?.find(a=>a.id===id);
+    }
+    completed=!!M.organizeDrawerDrop(item,destination);
+  }else{
+    const dock=dockIndex(x,y);
+    const home=homePoint(x,y);
+    if(dock!==null){
+      completed=dropOnDock(item,source,dock);
+      if(completed)M.toast('FAVORITES UPDATED');
+    }else if(home){
+      completed=dropOnHome(item,source,home.pageId,home.x,home.y);
+      if(completed)M.toast('HOME SCREEN UPDATED');
+    }
+    if(!completed&&source.loc==='drawer'&&M.view==='home'){
+      // A lifted app dragged to Home may land on unused space instead of
+      // an exact cell. In that case place just that app in the next free slot.
+      const added=M.mutate(model=>C.addHome(model,{...item,id:C.uid('home'),x:0,y:0,w:1,h:1},model.current));
+      if(added){completed=true;M.toast('APP ADDED TO HOME');}
+    }
+    if(!completed&&source.loc==='folder'){
+      const added=M.mutate(model=>C.addHome(model,{...item,id:C.uid('home'),x:0,y:0,w:1,h:1},model.current));
+      if(added){
+        const folder=M.findFolder(source.folderId);
+        if(folder)M.mutate(()=>{folder.apps=folder.apps.filter(a=>a.pkg!==item.pkg);});
+        completed=true;M.toast('MOVED APP TO HOME');
+      }
     }
   }
   M.drag=null;
   $('dragGhost').classList.add('hidden');$('dragGhost').textContent='';
-  document.querySelectorAll('.drop-candidate,.drag-origin').forEach(n=>n.classList.remove('drop-candidate','drag-origin'));
+  document.querySelectorAll('.drop-candidate,.drag-origin,.held-item').forEach(n=>{
+    n.classList.remove('drop-candidate','drag-origin','held-item');
+  });
   M.gestureSuppressUntil=Date.now()+580;
   M.render();
-  if(!completed&&source.loc==='drawer'&&!dragging.moved){
-    M.openSheet('app-actions',{item:source.item});
-  }else if(!completed&&source.loc==='folder'&&!dragging.moved){
-    M.openFolder(source.folderId);
-    M.openSheet('folder-app-actions',{app:source.item});
-  }else if(!completed&&dragging.moved)M.toast('NO AVAILABLE DROP LOCATION');
+  if(!completed)M.toast('APP WAS NOT MOVED');
 }
 M.endDrag=function(cancel=false){
   clearEdge();clearTimer();press=null;
+  document.querySelectorAll('.held-item').forEach(n=>n.classList.remove('held-item'));
   if(this.drag){
     if(!cancel)finalizeDrag(this.drag.x,this.drag.y);
     else{
@@ -251,8 +298,31 @@ function finish(x,y){
   clearTimer();clearEdge();
   const p=press;press=null;
   if(!p)return;
+  p.source?.container?.classList.remove('held-item');
+  if(p.resize){
+    const r=p.resize;
+    if(!r.moved){
+      M.openSheet('resize',{id:r.id});
+    }else{
+      const done=M.mutate(model=>C.resizeSmart(model,r.id,r.previewW,r.previewH));
+      if(!done)M.toast('NOT ENOUGH ROOM TO RESIZE');
+      M.renderHome();
+    }
+    M.gestureSuppressUntil=Date.now()+550;
+    return;
+  }
   if(M.drag){finalizeDrag(x,y);return;}
-  if(p.longPressed)return;
+  if(p.longPressed){
+    M.gestureSuppressUntil=Date.now()+600;
+    if(p.source?.loc==='drawer'){
+      M.openSheet('app-actions',{item:p.source.item});
+    }else if(p.source?.loc==='folder'){
+      M.openSheet('folder-app-actions',{app:p.source.item});
+    }else if(p.source?.loc==='home'||p.source?.loc==='dock'){
+      M.enterEdit();
+    }
+    return;
+  }
   const dx=x-p.x,dy=y-p.y;
   if(Math.max(Math.abs(dx),Math.abs(dy))<SWIPE_DISTANCE)return;
   if(Math.abs(dx)>Math.abs(dy)*1.24){
@@ -274,7 +344,7 @@ function finish(x,y){
     }
   }
 }
-function cancel(){clearTimer();clearEdge();press=null;M.endDrag(true);}
+function cancel(){clearTimer();clearEdge();press?.source?.container?.classList.remove('held-item');press=null;M.endDrag(true);}
 M.installGestures=function(){
   this.installUi();
   // Touch events are required: Samsung WebView may cancel pointer events
@@ -312,6 +382,7 @@ M.installGestures=function(){
     const source=sourceFrom(event.target);
     if(!source||!validScene())return;
     event.preventDefault();
+    if(press?.longPressed)return; // touchend chooses tap-options or drag
     clearTimer();press=null;
     if(source.loc==='drawer')this.openSheet('app-actions',{item:source.item});
     else if(source.loc==='folder')this.openSheet('folder-app-actions',{app:source.item});
