@@ -1,12 +1,12 @@
 # MEK-AI Mobile // Your Overgrown Android Home
 
-**v0.2.0: editable launcher alpha, designed for the Galaxy S10+ (Android 12).**
+**v0.2.1: editable launcher alpha, designed for the Galaxy S10+ (Android 12).**
 
 A real, non-root Android **home launcher** that keeps MEK-AI's forest-green, weathered workshop personality while providing a phone-like customizable tile grid. It replaces your **home screen**, not Android firmware, notification shade, or lock screen.
 
 ## Installation
 
-1. Download the [tested v0.2.0 APK from the successful GitHub Actions build](https://github.com/26Nwinters/mek-ai-mobile-/actions/runs/39629146428), under Artifacts, or use the direct APK provided in the ChatGPT conversation.
+1. Download the [tested v0.2.1 APK from the successful GitHub Actions build](https://github.com/26Nwinters/mek-ai-mobile-/actions/runs/39629821014), under Artifacts, or use the direct APK provided in the ChatGPT conversation.
 2. Install it on Android 12+, allowing *Install unknown apps* for your browser or file manager only when prompted.
 3. If Android reports **App not installed** when updating v0.1.1, first uninstall the previous MEK-AI development build. **Warning: this clears its saved local tasks, notes, and preferences.** The CI debug signing key is not stable between workflow runs.
 4. Choose **MEK-AI Mobile** under **Settings → Apps → Choose default apps → Home app**.
@@ -23,7 +23,7 @@ A real, non-root Android **home launcher** that keeps MEK-AI's forest-green, wea
 
 Your layout, column count, tasks, workshop note, and theme are saved locally to the launcher.
 
-## Stability improvements in v0.2.0
+## Stability improvements in v0.2.1
 
 Previously the App Archive requested and converted every installed app icon in **one synchronous JavaScript-to-Android call**. This could block the WebView when switching tabs.
 
@@ -33,7 +33,7 @@ Now:
 - The App Archive paints in small batches rather than creating every app item in one frame.
 - App icons are fetched lazily when visible and cached in memory.
 - Navigation does not repeatedly rescan installed apps when switching screens.
-- The five-tab launcher interface and layout operations are covered by automated tests.
+- The five-tab launcher interface, duplicate live widgets, and layout operations are covered by automated tests.
 
 **These changes passed simulated UI smoke tests and the GitHub Android APK build. Actual stability on your Galaxy S10+ still needs real-device verification.**
 
