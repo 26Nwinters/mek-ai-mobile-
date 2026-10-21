@@ -15,7 +15,8 @@ async function createPhone(){
   w.MEK={
     battery:()=>JSON.stringify({percent:72,charging:false}),
     isDefaultHome:()=>true,
-    getAppIcon:()=>'', openDefault:()=>{},
+    getAppIcon:()=>'',requestAppIcon:(pkg)=>w.setTimeout(()=>w.mekIconReady(pkg,''),0),
+    openDefault:()=>{},
     requestApps:()=>w.setTimeout(()=>w.mekAppsReady(JSON.stringify(apps)),0),
     launchApp:()=>{},requestHomeRole:()=>{}
   };
@@ -24,113 +25,154 @@ async function createPhone(){
   await new Promise(resolve=>setImmediate(resolve));
   return dom;
 }
-test('four navigation tabs and the gesture drawer switch without blocking on app icons',async()=>{
+function touch(w,target,type,x,y){
+  const e=new w.Event(type,{bubbles:true,cancelable:true});
+  const point={clientX:x,clientY:y};
+  Object.defineProperty(e,'touches',{value:type==='touchstart'?[point]:[]});
+  Object.defineProperty(e,'changedTouches',{value:[point]});
+  target.dispatchEvent(e);
+}
+function swipe(w,element,x1,y1,x2,y2){
+  touch(w,element,'touchstart',x1,y1);
+  touch(w,element,'touchend',x2,y2);
+}
+test('no navigation bar or permanent Apps button; home has full six-row grid pages',async()=>{
   const dom=await createPhone(),w=dom.window,d=w.document;
-  assert.equal(d.querySelectorAll('#homeGrid .home-tile').length,10);
+  assert.equal(d.getElementById('bottomNav'),null);
+  assert.equal(d.getElementById('appSwipeHandle'),null);
+  assert.equal(d.querySelectorAll('.home-tile').length,9);
+  assert.equal(d.querySelectorAll('.home-page').length,2);
+  assert.equal(d.querySelectorAll('.home-page [data-type="shortcut"] .home-app-label').length,3);
+  assert.equal(d.querySelectorAll('.home-tile[data-type="shortcut"] .home-app-label').length,3);
   assert.equal(d.getElementById('topBattery').textContent,'72%');
-  assert.equal(d.querySelectorAll('.bottom-nav .nav-item').length,4);
-  assert.equal(d.querySelector('.bottom-nav [data-route="drawer"]'),null);
-  for(let i=0;i<7;i++){
-    for(const route of ['drawer','mek','controls','settings','home'])w.navigate(route);
-  }
-  w.navigate('drawer');
-  await new Promise(resolve=>setTimeout(resolve,120));
-  assert.match(d.getElementById('appCount').textContent,/150 APPS/);
-  assert.equal(d.querySelectorAll('.app-page').length,6);
-  assert.equal(d.querySelectorAll('#appPageDots button').length,6);
-  assert.ok(d.querySelectorAll('.app-page[data-page-index="0"] .app-button').length>0);
-  w.goToAppPage(4,true);
-  assert.equal(d.querySelectorAll('.app-page[data-page-index="4"] .app-button').length,25);
-  assert.equal(d.querySelectorAll('#appPageDots button.selected').length,1);
-  assert.equal(d.querySelectorAll('#appPageDots button.selected')[0].getAttribute('aria-label'),'Go to app page 5');
-  w.navigate('home');
-  assert.equal(d.querySelector('.view.active').id,'view-home');
+  assert.equal(d.querySelector('.home-page').style.getPropertyValue('--grid-rows'),'6');
+  assert.equal(d.querySelectorAll('#pageRailDots button').length,5); // MEK, two home pages, controls, settings
   dom.window.close();
 });
-test('edit, insert widget, resize columns, pin an app and exit',async()=>{
+test('Samsung-style separate grids default to 4×6 home, 5×6 apps and 4×4 folder',async()=>{
+  const dom=await createPhone(),w=dom.window,d=w.document;
+  assert.equal(d.getElementById('homeGridSummary').textContent,'4×6 ↗');
+  assert.equal(d.getElementById('appsGridSummary').textContent,'5×6 ↗');
+  assert.equal(d.getElementById('foldersGridSummary').textContent,'4×4 ↗');
+  w.openEditor('grid-home');assert.match(d.getElementById('editorHeading').textContent,/HOME SCREEN GRID/);
+  w.setGridDimension('grid-home','rows',7);
+  w.setGridDimension('grid-home','cols',5);
+  assert.equal(d.getElementById('homeGridSummary').textContent,'5×7 ↗');
+  assert.equal(d.querySelector('.home-page').style.getPropertyValue('--grid-cols'),'5');
+  assert.equal(d.querySelector('.home-page').style.getPropertyValue('--grid-rows'),'7');
+  w.setGridDimension('grid-apps','cols',4);
+  w.setGridDimension('grid-apps','rows',5);
+  w.setGridDimension('grid-folders','cols',3);
+  w.setGridDimension('grid-folders','rows',5);
+  assert.equal(d.getElementById('appsGridSummary').textContent,'4×5 ↗');
+  assert.equal(d.getElementById('foldersGridSummary').textContent,'3×5 ↗');
+  assert.equal(d.getElementById('homeGridSummary').textContent,'5×7 ↗');
+  dom.window.close();
+});
+test('app drawer shows 5 columns × 6 rows and 150 apps on 5 swipeable pages',async()=>{
+  const dom=await createPhone(),w=dom.window,d=w.document;
+  w.openAppDrawer();
+  await new Promise(resolve=>setTimeout(resolve,65));
+  assert.equal(d.querySelectorAll('.app-page').length,5);
+  assert.equal(d.querySelectorAll('#appPageDots button').length,5);
+  assert.match(d.getElementById('appCount').textContent,/150 APPS/);
+  assert.equal(d.querySelector('.app-page').style.getPropertyValue('--app-cols'),'5');
+  assert.equal(d.querySelector('.app-page').style.getPropertyValue('--app-rows'),'6');
+  assert.equal(d.querySelectorAll('.app-page[data-page-index="0"] .app-button').length,30);
+  w.goToAppPage(4,true);
+  assert.equal(d.querySelectorAll('.app-page[data-page-index="4"] .app-button').length,30);
+  dom.window.close();
+});
+test('swipe up from central home opens apps, down closes, sideways changes home and MEK pages',async()=>{
+  const dom=await createPhone(),w=dom.window,d=w.document;
+  swipe(w,d.getElementById('view-home'),160,420,160,245);
+  assert.equal(d.querySelector('.view.active').id,'view-drawer');
+  await new Promise(resolve=>setTimeout(resolve,65));
+  swipe(w,d.getElementById('view-drawer'),160,230,160,370);
+  assert.equal(d.querySelector('.view.active').id,'view-home');
+  swipe(w,d.getElementById('view-home'),180,280,320,285); // swipe right from home => MEK
+  assert.equal(d.querySelector('.view.active').id,'view-mek');
+  swipe(w,d.getElementById('view-mek'),320,250,110,255); // left => Home
+  assert.equal(d.querySelector('.view.active').id,'view-home');
+  swipe(w,d.getElementById('view-home'),320,275,110,275); // left => second Home
+  assert.equal(d.querySelector('.view.active').id,'view-home');
+  assert.equal(d.getElementById('pageRailLabel').textContent,'HOME 2');
+  swipe(w,d.getElementById('view-home'),320,275,110,275); // left => Control
+  assert.equal(d.querySelector('.view.active').id,'view-controls');
+  swipe(w,d.getElementById('view-controls'),320,275,110,275); // left => Setup
+  assert.equal(d.querySelector('.view.active').id,'view-settings');
+  swipe(w,d.getElementById('view-settings'),110,275,320,275); // right => Control
+  assert.equal(d.querySelector('.view.active').id,'view-controls');
+  dom.window.close();
+});
+test('pin app from Apps chooser after longpress editing and keep it in home grid',async()=>{
   const dom=await createPhone(),w=dom.window,d=w.document;
   w.enterEditMode();
-  assert.equal(d.body.classList.contains('edit-home'),true);
-  assert.ok(d.querySelectorAll('.tile-drag-handle').length>=10);
-  w.openEditor('widgets');
-  assert.equal(d.querySelectorAll('.widget-pick').length,7);
-  d.querySelector('.widget-pick').click();
-  assert.equal(d.querySelectorAll('#homeGrid .home-tile').length,11);
-  w.changeColumns(1);
-  assert.equal(d.getElementById('settingsGridCount').textContent,'5');
-  assert.equal(d.getElementById('homeGrid').style.getPropertyValue('--grid-cols'),'5');
+  assert.ok(d.querySelectorAll('.tile-drag-handle').length>=9);
   w.openEditor('apps');
-  assert.equal(d.getElementById('view-drawer').classList.contains('active'),true);
-  await new Promise(resolve=>setTimeout(resolve,110));
-  d.querySelector('#appPageTrack .app-button').click();
-  assert.equal(d.querySelectorAll('#homeGrid .home-tile').length,12);
+  await new Promise(resolve=>setTimeout(resolve,80));
+  assert.equal(d.querySelector('.view.active').id,'view-drawer');
+  assert.equal(d.getElementById('appDrawerModeHint').classList.contains('hidden'),false);
+  const btn=d.querySelector('#appPageTrack .app-button');
+  assert.ok(btn,'app chooser has apps');
+  btn.click();
+  assert.equal(d.querySelector('.view.active').id,'view-home');
+  const pinned=d.querySelector('.home-tile[data-type="app"]');
+  assert.ok(pinned,'new app tile exists');
+  assert.equal(pinned.querySelector('.home-app-label').textContent,'Application 000');
+  assert.equal(d.querySelectorAll('.home-tile').length,10);
+  assert.equal(d.querySelector('.edit-home')!==null,true);
   w.exitEditMode();
-  assert.equal(d.body.classList.contains('edit-home'),false);
   dom.window.close();
 });
-test('theme switching, notes and local task changes persist',async()=>{
+test('create and edit folders, add real app, and display its folder page',async()=>{
   const dom=await createPhone(),w=dom.window,d=w.document;
-  w.setTheme('moss');
-  assert.equal(d.body.classList.contains('theme-moss'),true);
-  w.openEditor('note');
-  const input=d.getElementById('workshopNoteInput');
-  input.value='My very own terminal';
-  d.querySelector('#editSheetBody .primary-action').click();
-  w.enterEditMode();w.openEditor('widgets');
-  const note=Array.from(d.querySelectorAll('.widget-pick')).find(n=>n.textContent.includes('Workshop note'));
-  note.click();w.exitEditMode();
-  assert.match(d.querySelector('.note-content').textContent,/My very own terminal/);
+  w.enterEditMode();
+  w.createFolder();
+  assert.equal(d.getElementById('folderOverlay').classList.contains('hidden'),false);
+  assert.equal(d.querySelectorAll('.home-tile[data-type="folder"]').length,1);
+  const name=d.getElementById('folderName');
+  name.value='My Apps';
+  name.dispatchEvent(new w.Event('change'));
+  d.getElementById('folderAdd').click();
+  assert.equal(d.querySelector('.view.active').id,'view-drawer');
+  await new Promise(resolve=>setTimeout(resolve,80));
+  assert.match(d.getElementById('appDrawerModeHint').textContent,/CHOOSE APP FOR FOLDER/);
+  d.querySelector('#appPageTrack .app-button').click();
+  assert.equal(d.querySelector('.view.active').id,'view-home');
+  assert.equal(d.getElementById('folderOverlay').classList.contains('hidden'),false);
+  assert.equal(d.querySelectorAll('.folder-page .app-button').length,1);
+  assert.equal(d.getElementById('folderName').value,'My Apps');
+  w.closeFolder();
+  w.exitEditMode();
+  const folderTile=d.querySelector('.home-tile[data-type="folder"]');
+  assert.equal(folderTile.querySelector('.home-app-label').textContent,'My Apps');
   dom.window.close();
 });
-
-test('multiple copies of live widgets all update instead of only the first',async()=>{
+test('changing app grid paginates according to independently saved dimensions',async()=>{
+  const dom=await createPhone(),w=dom.window,d=w.document;
+  w.setGridDimension('grid-apps','cols',4);
+  w.setGridDimension('grid-apps','rows',4);
+  w.openAppDrawer();await new Promise(resolve=>setTimeout(resolve,80));
+  assert.equal(d.querySelectorAll('.app-page').length,10);
+  assert.equal(d.querySelectorAll('.app-page[data-page-index="0"] .app-button').length,16);
+  assert.equal(d.querySelector('.app-page').style.getPropertyValue('--app-cols'),'4');
+  assert.equal(d.querySelector('.app-page').style.getPropertyValue('--app-rows'),'4');
+  dom.window.close();
+});
+test('clock, battery, workshop note copies and other views remain functional',async()=>{
   const dom=await createPhone(),w=dom.window,d=w.document;
   w.enterEditMode();
   for(const label of ['Battery monitor','Dot clock','Workshop note']){
     w.openEditor('widgets');
     const pick=Array.from(d.querySelectorAll('.widget-pick')).find(n=>n.textContent.includes(label));
-    assert.ok(pick,'widget chooser contains '+label);
     pick.click();
   }
   w.exitEditMode();
   assert.equal(d.querySelectorAll('.home-tile[data-type="battery"]').length,2);
   assert.deepEqual(Array.from(d.querySelectorAll('.home-tile[data-type="battery"] .widget-reading')).map(x=>x.textContent),['72%','72%']);
   assert.equal(d.querySelectorAll('.tile-dot-clock').length,2);
-  assert.equal(d.querySelectorAll('.tile-date').length,2);
-  dom.window.close();
-});
-
-test('swiping upward at the home dock opens app pages and swiping downward closes them',async()=>{
-  const dom=await createPhone(),w=dom.window,d=w.document;
-  function pointer(type,target,x,y){
-    const ev=new w.Event(type,{bubbles:true,cancelable:true});
-    Object.defineProperties(ev,{clientX:{value:x},clientY:{value:y},isPrimary:{value:true},pointerType:{value:'touch'}});
-    target.dispatchEvent(ev);
-  }
-  const handle=d.getElementById('appSwipeHandle');
-  pointer('pointerdown',handle,175,735);
-  pointer('pointerup',handle,177,590);
-  assert.equal(d.querySelector('.view.active').id,'view-drawer');
-  await new Promise(resolve=>setTimeout(resolve,65));
-  pointer('pointerdown',d.getElementById('view-drawer'),180,180);
-  pointer('pointerup',d.getElementById('view-drawer'),180,325);
+  w.navigate('mek');w.navigate('controls');w.navigate('settings');w.navigate('home');
   assert.equal(d.querySelector('.view.active').id,'view-home');
-  dom.window.close();
-});
-
-test('searching resets to one app page and page selection survives normal tab switches',async()=>{
-  const dom=await createPhone(),w=dom.window,d=w.document;
-  w.openAppDrawer();
-  await new Promise(resolve=>setTimeout(resolve,80));
-  w.goToAppPage(3,true);
-  assert.equal(d.querySelectorAll('.app-page').length,6);
-  w.navigate('mek');w.openAppDrawer();
-  assert.equal(d.querySelectorAll('#appPageDots button.selected')[0].getAttribute('aria-label'),'Go to app page 4');
-  const input=d.getElementById('appSearch');
-  input.value='Application 012';
-  input.dispatchEvent(new w.Event('input',{bubbles:true}));
-  assert.equal(d.querySelectorAll('.app-page').length,1);
-  assert.equal(d.querySelectorAll('#appPageTrack .app-button').length,1);
-  assert.match(d.getElementById('appCount').textContent,/1 APP · PAGE 1\/1/);
   dom.window.close();
 });

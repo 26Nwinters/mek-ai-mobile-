@@ -8,7 +8,14 @@ const STORAGE = {
   home:'mek_mobile_grid_v2',
   cols:'mek_mobile_columns_v2',
   theme:'mek_mobile_theme_v2',
-  note:'mek_mobile_note_v2'
+  note:'mek_mobile_note_v2',
+  homeRows:'mek_mobile_home_rows_v4',
+  appCols:'mek_mobile_app_cols_v4',
+  appRows:'mek_mobile_app_rows_v4',
+  folderCols:'mek_mobile_folder_cols_v4',
+  folderRows:'mek_mobile_folder_rows_v4',
+  homePage:'mek_mobile_home_page_v4',
+  minHomePages:'mek_mobile_min_home_pages_v4'
 };
 function storageGet(key, fallback) {
   try {
@@ -21,7 +28,15 @@ const model=window.MekLayout;
 const appState={
   route:'home', edit:false, pickMode:false, dragging:null, suppressClickUntil:0,
   cols:model.columns(storageGet(STORAGE.cols,4)),
-  tiles:model.normalize(storageGet(STORAGE.home,null)),
+  rows:model.rows(storageGet(STORAGE.homeRows,6)),
+  appCols:model.drawerColumns(storageGet(STORAGE.appCols,5)),
+  appRows:model.rows(storageGet(STORAGE.appRows,6)),
+  folderCols:model.folderColumns(storageGet(STORAGE.folderCols,4)),
+  folderRows:model.folderRows(storageGet(STORAGE.folderRows,4)),
+  homeIndex:Math.max(0,Number(storageGet(STORAGE.homePage,0))||0),
+  homePageCount:1, minHomePages:Math.max(1,Math.min(8,Number(storageGet(STORAGE.minHomePages,1))||1)),
+  folderId:null, folderPageIndex:0, folderPickId:null,
+  tiles:model.normalize(storageGet(STORAGE.home,null)).filter(t=>!(t.type==='shortcut'&&t.kind==='drawer')),
   loaded:false, loading:false, apps:[], renderToken:0,
   pageSize:25, pageIndex:0, pageCount:1, filteredApps:[],
   iconCache:new Map(), iconQueue:[], iconPending:new Map(), iconWorker:null,
@@ -33,27 +48,80 @@ function nativeOpen(kind){
   catch(e) { console.warn('MEK-AI native shortcut unavailable',e); }
 }
 function navigate(route){
-  if(!['home','drawer','mek','controls','settings'].includes(route)) route='home';
-  if(appState.edit && !appState.pickMode && route!=='home') exitEditMode();
+  if(!['home','drawer','mek','controls','settings'].includes(route))route='home';
+  if(appState.edit && !appState.pickMode && route!=='home')exitEditMode();
   if(appState.pickMode && route!=='drawer')appState.pickMode=false;
   closeEditor();
   appState.route=route;
   document.body.classList.toggle('on-home',route==='home');
   document.body.classList.toggle('on-drawer',route==='drawer');
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id==='view-'+route));
-  document.querySelectorAll('.nav-item').forEach(v=>v.classList.toggle('on',v.dataset.route===route));
   window.scrollTo(0,0);
   if(route==='drawer')refreshApps();
   if(route==='home'){renderHome();updateBattery();}
   const hint=$('appDrawerModeHint');
   if(hint)hint.classList.toggle('hidden',!appState.pickMode);
+  if(hint&&appState.pickMode)hint.firstChild.textContent=appState.folderPickId?'CHOOSE APP FOR FOLDER ':'TAP AN APP TO ADD TO HOME ';
+  updatePageRail();
 }
-function cancelAppPick(){appState.pickMode=false;navigate('home');if(!appState.edit)enterEditMode();}
+function navigateHorizontal(direction){
+  if(appState.route==='drawer'||!$('editSheet').classList.contains('hidden')||!$('folderOverlay').classList.contains('hidden')||appState.edit)return;
+  if(appState.route==='home'){
+    if(direction<0){
+      if(appState.homeIndex>0)goToHomePage(appState.homeIndex-1);
+      else navigate('mek');
+    }else if(appState.homeIndex<appState.homePageCount-1)goToHomePage(appState.homeIndex+1);
+    else navigate('controls');
+    return;
+  }
+  if(appState.route==='mek' && direction>0){appState.homeIndex=0;navigate('home');return;}
+  if(appState.route==='controls'){
+    if(direction<0){appState.homeIndex=Math.max(0,appState.homePageCount-1);navigate('home');}
+    else navigate('settings');
+    return;
+  }
+  if(appState.route==='settings' && direction<0)navigate('controls');
+}
+function goToHomePage(index){
+  appState.homeIndex=Math.max(0,Math.min(appState.homePageCount-1,Math.round(index)));
+  storageSet(STORAGE.homePage,appState.homeIndex);
+  const track=$('homeGrid')?.querySelector('.home-pages-track');
+  if(track)track.style.transform='translateX(-'+(100*appState.homeIndex)+'%)';
+  updatePageRail();
+}
+function addHomePage(){
+  appState.minHomePages=Math.min(8,Math.max(appState.minHomePages,appState.homePageCount+1));
+  storageSet(STORAGE.minHomePages,appState.minHomePages);
+  renderHome();
+  goToHomePage(appState.homePageCount-1);
+}
+function updatePageRail(){
+  const bar=$('pageRailDots'),label=$('pageRailLabel'),hint=$('pageRailHint');
+  if(!bar||!label)return;
+  const pages=Math.max(1,appState.homePageCount);
+  const destinations=[{route:'mek',name:'MEK-AI'},...Array.from({length:pages},(_,i)=>({route:'home',page:i,name:'HOME '+(i+1)})),{route:'controls',name:'HOUSE'},{route:'settings',name:'SETUP'}];
+  const active=appState.route==='home'?appState.homeIndex+1:appState.route==='mek'?0:pages+['controls','settings'].indexOf(appState.route)+1;
+  const activeIndex=Math.max(0,Math.min(destinations.length-1,active));
+  bar.textContent='';
+  destinations.forEach((dest,i)=>{
+    const dot=document.createElement('button');
+    dot.type='button';dot.className=i===activeIndex?'active':'';
+    dot.setAttribute('aria-label','Go to '+dest.name);
+    dot.onclick=()=>dest.route==='home'?(appState.homeIndex=dest.page,navigate('home')):navigate(dest.route);
+    bar.append(dot);
+  });
+  label.textContent=destinations[activeIndex].name;
+  if(hint)hint.textContent=appState.route==='home'?'↑ APPS':'↔ SWIPE';
+}
+function cancelAppPick(){appState.pickMode=false;appState.folderPickId=null;navigate('home');enterEditMode();}
 function goBackInLauncher(){
+  if(!$('folderOverlay').classList.contains('hidden')){closeFolder();return;}
   if(!$('editSheet').classList.contains('hidden')){closeEditor();return;}
   if(appState.pickMode){cancelAppPick();return;}
   if(appState.edit){exitEditMode();return;}
+  if(appState.route==='drawer'){navigate('home');return;}
   if(appState.route!=='home'){navigate('home');return;}
+  if(appState.homeIndex>0){goToHomePage(0);return;}
   window.scrollTo(0,0);
 }
 const GLYPHS={
@@ -132,6 +200,19 @@ function iconTileHTML(tile){
   const wrap=document.createElement('div');wrap.className='grid-icon-tile';
   const icon=document.createElement('span');icon.className='home-app-icon';
   const label=document.createElement('span');label.className='home-app-label';
+  if(tile.type==='folder'){
+    const art=document.createElement('span');art.className='folder-icon-art';
+    const preview=(tile.apps||[]).slice(0,4);
+    for(let i=0;i<4;i++){
+      const box=document.createElement('span');
+      box.textContent=preview[i]?(preview[i].label||'?').slice(0,1).toUpperCase():'·';
+      art.append(box);
+    }
+    icon.replaceWith(art);
+    label.textContent=tile.name||'Folder';
+    wrap.append(art,label);
+    return wrap;
+  }
   if(tile.type==='app'){
     const initial=document.createElement('span');initial.textContent=(tile.label||'A').charAt(0).toUpperCase();
     icon.append(initial);
@@ -147,68 +228,181 @@ function iconTileHTML(tile){
 }
 function renderHome(){
   const host=$('homeGrid');if(!host)return;
-  host.style.setProperty('--grid-cols',String(appState.cols));
+  const pages=model.pack(appState.tiles,appState.cols,appState.rows);
+  appState.homePageCount=Math.max(1,pages.length,appState.minHomePages);
+  if(appState.homePageCount>8)appState.homePageCount=8;
+  appState.homeIndex=Math.min(appState.homeIndex,appState.homePageCount-1);
   host.textContent='';
-  const fragment=document.createDocumentFragment();
-  for(const tile of appState.tiles){
+  const track=document.createElement('div');track.className='home-pages-track';
+  const createTile=(tile,placement)=>{
     const element=document.createElement('div');
     element.className='home-tile';
     element.setAttribute('role','listitem');
     element.tabIndex=0;
     element.dataset.tileId=tile.id;
     element.dataset.type=tile.type;
-    element.style.gridColumn='span '+model.span(tile,appState.cols);
-    if(tile.type==='app'||tile.type==='shortcut')element.appendChild(iconTileHTML(tile));
+    element.style.gridColumn=(placement.col+1)+' / span '+placement.w;
+    element.style.gridRow=(placement.row+1)+' / span '+placement.h;
+    if(tile.type==='app'||tile.type==='shortcut'||tile.type==='folder')
+      element.appendChild(iconTileHTML(tile));
     else element.innerHTML=widgetHTML(tile.type);
-    const remove=document.createElement('button');
-    remove.className='tile-edit-action tile-remove';remove.textContent='×';
-    remove.setAttribute('aria-label','Remove '+(tile.label||model.labels[tile.type]||'tile'));
+    const remove=document.createElement('button');remove.className='tile-edit-action tile-remove';
+    remove.textContent='×';remove.setAttribute('aria-label','Remove '+(tile.name||tile.label||tile.type));
     remove.addEventListener('click',ev=>{ev.stopPropagation();removeTile(tile.id);});
-    const handle=document.createElement('button');
-    handle.className='tile-edit-action tile-drag-handle';handle.textContent='⠿';
-    handle.setAttribute('aria-label','Drag to rearrange '+(tile.label||tile.type));
+    const handle=document.createElement('button');handle.className='tile-edit-action tile-drag-handle';
+    handle.textContent='⠿';handle.setAttribute('aria-label','Drag '+(tile.name||tile.label||tile.type));
     handle.addEventListener('pointerdown',ev=>beginTileDrag(ev,tile.id));
     handle.addEventListener('click',ev=>ev.stopPropagation());
     element.append(remove,handle);
-    fragment.appendChild(element);
+    return element;
+  };
+  for(let i=0;i<appState.homePageCount;i++){
+    const page=document.createElement('div');page.className='home-page';
+    page.setAttribute('aria-label','Home page '+(i+1));
+    page.style.setProperty('--grid-cols',String(appState.cols));
+    page.style.setProperty('--grid-rows',String(appState.rows));
+    for(const placement of (pages[i]||[]))page.append(createTile(placement.tile,placement));
+    if(!page.children.length){
+      const empty=document.createElement('button');empty.className='home-page-empty';
+      empty.textContent='EMPTY HOME PAGE · TAP TO ADD AN APP OR WIDGET';
+      empty.onclick=()=>{enterEditMode();openEditor('apps');};
+      page.append(empty);
+    }
+    track.append(page);
   }
-  host.appendChild(fragment);
-  if(appState.tiles.length===0){
-    const empty=document.createElement('button');
-    empty.className='empty-home-grid';empty.textContent='＋ ADD YOUR FIRST WIDGET OR APP';
-    empty.onclick=()=>{enterEditMode();openEditor('widgets');};
-    host.appendChild(empty);
-  }
+  host.append(track);
   renderTasks();
   document.querySelectorAll('.note-content').forEach(node=>node.textContent=String(storageGet(STORAGE.note,'A little place for your thoughts.')).slice(0,300));
-  updateDate();
-  updateBattery();
+  updateDate();updateBattery();
+  goToHomePage(appState.homeIndex);
 }
 function removeTile(id){
   if(!appState.edit)return;
   appState.tiles=appState.tiles.filter(t=>t.id!==id);
   saveLayout();renderHome();
 }
+function findTilePage(tileId){
+  const pages=model.pack(appState.tiles,appState.cols,appState.rows);
+  return Math.max(0,pages.findIndex(p=>p.some(x=>x.tile.id===tileId)));
+}
+function notifyToast(message){
+  const old=$('mekToast');
+  if(old)old.remove();
+  const node=document.createElement('div');node.id='mekToast';node.className='mek-toast';
+  node.textContent=message;document.body.append(node);
+  setTimeout(()=>{if(node.isConnected)node.remove();},2300);
+}
 function addWidget(type){
-  if(!model.widgetTypes.includes(type))return;
-  if(appState.tiles.length>=40)return;
-  appState.tiles.push(model.newTile(type));
-  saveLayout();closeEditor();navigate('home');enterEditMode();
-  setTimeout(()=>window.scrollTo(0,document.body.scrollHeight),80);
+  if(!model.widgetTypes.includes(type)||appState.tiles.length>=40)return;
+  const tile=model.newTile(type);
+  appState.tiles.push(tile);
+  saveLayout();closeEditor();
+  appState.homeIndex=findTilePage(tile.id);
+  navigate('home');enterEditMode();goToHomePage(appState.homeIndex);
+  notifyToast('WIDGET ADDED TO HOME');
 }
 function addAppTile(pkg,label){
-  if(appState.tiles.length>=40)return;
-  try {appState.tiles.push(model.newTile('app',{pkg,label}));}
-  catch(e){return;}
+  if(appState.folderPickId){
+    const folder=appState.tiles.find(t=>t.id===appState.folderPickId&&t.type==='folder');
+    if(!folder){appState.folderPickId=null;notifyToast('FOLDER NOT FOUND');return;}
+    const apps=model.cleanApps([...(folder.apps||[]),{pkg,label}]);
+    if(apps.length===(folder.apps||[]).length){notifyToast('APP ALREADY IN FOLDER');return;}
+    folder.apps=apps;
+    const id=folder.id;
+    saveLayout();appState.pickMode=false;appState.folderPickId=null;
+    navigate('home');openFolder(id);
+    notifyToast('APP ADDED TO FOLDER');
+    return;
+  }
+  if(appState.tiles.length>=40){notifyToast('HOME IS FULL');return;}
+  let tile;
+  try{tile=model.newTile('app',{pkg,label});}catch(e){notifyToast('COULD NOT ADD APP');return;}
+  appState.tiles.push(tile);
   saveLayout();
   appState.pickMode=false;
+  appState.homeIndex=findTilePage(tile.id);
   navigate('home');
-  enterEditMode();
-  setTimeout(()=>window.scrollTo(0,document.body.scrollHeight),80);
+  enterEditMode();goToHomePage(appState.homeIndex);
+  notifyToast((label||'APP')+' ADDED TO HOME');
+}
+function createFolder(){
+  if(appState.tiles.length>=40)return;
+  const folder=model.newTile('folder',{name:'New Folder',apps:[]});
+  appState.tiles.push(folder);saveLayout();
+  closeEditor();
+  appState.homeIndex=findTilePage(folder.id);
+  navigate('home');goToHomePage(appState.homeIndex);
+  openFolder(folder.id);
+}
+function openFolder(id){
+  const folder=appState.tiles.find(t=>t.id===id && t.type==='folder');
+  if(!folder)return;
+  appState.folderId=id;appState.folderPageIndex=0;
+  const overlay=$('folderOverlay');overlay.classList.remove('hidden');
+  const input=$('folderName');input.value=folder.name||'Folder';
+  input.onchange=()=>{folder.name=input.value.trim().slice(0,35)||'Folder';saveLayout();renderHome();};
+  renderFolder();
+}
+function closeFolder(){
+  $('folderOverlay').classList.add('hidden');
+  appState.folderId=null;
+}
+function renderFolder(){
+  const folder=appState.tiles.find(t=>t.id===appState.folderId&&t.type==='folder');
+  if(!folder)return;
+  const limit=appState.folderCols*appState.folderRows,apps=folder.apps||[];
+  const count=Math.max(1,Math.ceil(apps.length/limit));
+  appState.folderPageIndex=Math.min(appState.folderPageIndex,count-1);
+  const track=$('folderPageTrack');track.textContent='';
+  for(let pageIndex=0;pageIndex<count;pageIndex++){
+    const page=document.createElement('div');page.className='folder-page';
+    page.style.setProperty('--folder-cols',String(appState.folderCols));
+    page.style.setProperty('--folder-rows',String(appState.folderRows));
+    for(const app of apps.slice(pageIndex*limit,(pageIndex+1)*limit)){
+      const button=document.createElement('button');button.className='app-button';
+      const icon=document.createElement('span');icon.className='app-icon-wrap';
+      const initial=document.createElement('span');initial.textContent=app.label.charAt(0).toUpperCase();
+      initial.style.color='var(--amber)';icon.append(initial);attachAppIcon(icon,app.pkg);
+      const title=document.createElement('span');title.className='app-name';title.textContent=app.label;
+      button.append(icon,title);
+      button.onclick=()=>{
+        if(appState.edit){notifyToast('EXIT EDIT MODE TO OPEN APPS');return;}
+        try{if(window.MEK)MEK.launchApp(app.pkg);}catch(e){}
+      };
+      button.oncontextmenu=e=>{
+        e.preventDefault();
+        folder.apps=folder.apps.filter(a=>a.pkg!==app.pkg);saveLayout();renderFolder();renderHome();
+        notifyToast('REMOVED FROM FOLDER');
+      };
+      page.append(button);
+    }
+    track.append(page);
+  }
+  const dots=$('folderPageDots');dots.textContent='';
+  for(let i=0;i<count;i++){
+    const dot=document.createElement('button');dot.type='button';dot.className=i===appState.folderPageIndex?'selected':'';
+    dot.setAttribute('aria-label','Folder page '+(i+1));dot.onclick=()=>goToFolderPage(i);
+    dots.append(dot);
+  }
+  goToFolderPage(appState.folderPageIndex);
+}
+function goToFolderPage(index){
+  const count=$('folderPageTrack').children.length;
+  appState.folderPageIndex=Math.max(0,Math.min(count-1,Math.round(index)));
+  $('folderPageTrack').style.setProperty('--folder-offset','-'+(appState.folderPageIndex*100)+'%');
+  document.querySelectorAll('#folderPageDots button').forEach((dot,i)=>dot.classList.toggle('selected',i===appState.folderPageIndex));
+}
+function addAppToFolder(){
+  if(!appState.folderId)return;
+  appState.folderPickId=appState.folderId;
+  $('folderOverlay').classList.add('hidden');
+  appState.pickMode=true;
+  navigate('drawer');
 }
 function activateTile(id){
   if(Date.now()<appState.suppressClickUntil||appState.edit)return;
   const tile=appState.tiles.find(t=>t.id===id);if(!tile)return;
+  if(tile.type==='folder'){openFolder(tile.id);return;}
   if(tile.type==='app'){
     try{if(window.MEK)MEK.launchApp(tile.pkg);}catch(e){}
     return;
@@ -257,7 +451,7 @@ function exitEditMode(){
   document.body.classList.remove('edit-home');
   $('editToolbar').classList.add('hidden');
   $('editHomeButton').classList.remove('hidden');
-  $('homeHelp').textContent='HOLD AN EMPTY SPOT OR A TILE TO CUSTOMIZE ✳';
+  $('homeHelp').textContent='SWIPE UP FOR APPS · SWIPE SIDEWAYS FOR PAGES ✳';
   closeEditor();saveLayout();renderHome();
 }
 function setupLongPress(){
@@ -319,24 +513,49 @@ function endTileDrag(){
   }
   renderHome();
 }
-function changeColumns(delta){
-  setGridColumns(appState.cols+delta);
+function updateGridSummaries(){
+  const items=[
+    ['homeGridSummary',appState.cols,appState.rows],
+    ['appsGridSummary',appState.appCols,appState.appRows],
+    ['foldersGridSummary',appState.folderCols,appState.folderRows]
+  ];
+  items.forEach(([id,cols,rows])=>{const el=$(id);if(el)el.textContent=cols+'×'+rows+' ↗';});
 }
-function setGridColumns(value){
-  appState.cols=model.columns(value);
-  storageSet(STORAGE.cols,appState.cols);
-  if($('settingsGridCount'))$('settingsGridCount').textContent=String(appState.cols);
-  renderHome();
-  if(appState.editorKind==='grid'&&!$('editSheet').classList.contains('hidden'))renderEditorBody('grid');
+function gridValue(kind,axis){
+  if(kind==='grid-home')return axis==='cols'?appState.cols:appState.rows;
+  if(kind==='grid-apps')return axis==='cols'?appState.appCols:appState.appRows;
+  return axis==='cols'?appState.folderCols:appState.folderRows;
 }
+function setGridDimension(kind,axis,value){
+  if(kind==='grid')kind='grid-home';
+  if(!['grid-home','grid-apps','grid-folders'].includes(kind))return;
+  const map={
+    'grid-home':{col:'cols',row:'rows',colKey:STORAGE.cols,rowKey:STORAGE.homeRows,colClamp:model.columns,rowClamp:model.rows},
+    'grid-apps':{col:'appCols',row:'appRows',colKey:STORAGE.appCols,rowKey:STORAGE.appRows,colClamp:model.drawerColumns,rowClamp:model.rows},
+    'grid-folders':{col:'folderCols',row:'folderRows',colKey:STORAGE.folderCols,rowKey:STORAGE.folderRows,colClamp:model.folderColumns,rowClamp:model.folderRows}
+  };
+  const def=map[kind],column=axis==='cols';
+  const key=column?def.col:def.row;
+  const updated=(column?def.colClamp:def.rowClamp)(value);
+  appState[key]=updated;
+  storageSet(column?def.colKey:def.rowKey,updated);
+  updateGridSummaries();
+  if(kind==='grid-home')renderHome();
+  if(kind==='grid-apps'&&appState.route==='drawer'&&appState.loaded)renderApps(true);
+  if(kind==='grid-folders'&&appState.folderId)renderFolder();
+  if(appState.editorKind===kind && !$('editSheet').classList.contains('hidden'))renderEditorBody(kind);
+}
+function changeColumns(delta){setGridDimension('grid-home','cols',appState.cols+delta);}
+function setGridColumns(value){setGridDimension('grid-home','cols',value);}
 function openEditor(kind){
+  if(kind==='grid')kind='grid-home';
   if(kind==='apps'){
     closeEditor();
     appState.pickMode=true;
     navigate('drawer');
     return;
   }
-  if(!['widgets','grid','themes','note','new-task'].includes(kind))return;
+  if(!['widgets','grid-home','grid-apps','grid-folders','themes','note','new-task'].includes(kind))return;
   appState.editorKind=kind;
   $('editSheet').classList.remove('hidden');
   renderEditorBody(kind);
@@ -363,18 +582,32 @@ function renderEditorBody(kind){
     });
     body.append(grid);return;
   }
-  if(kind==='grid'){
-    title.textContent='GRID & TILE COUNT';
-    intro('Change the number of tile slots across the home screen. Wide widgets adapt automatically.');
-    const control=document.createElement('div');control.className='picker-grid-config';
-    const dec=document.createElement('button');dec.textContent='−';dec.onclick=()=>changeColumns(-1);
-    const count=document.createElement('strong');count.textContent=appState.cols+' COLUMNS';
-    const inc=document.createElement('button');inc.textContent='+';inc.onclick=()=>changeColumns(1);
-    control.append(dec,count,inc);body.append(control);
-    const demo=document.createElement('div');demo.className='picker-grid-demo';
-    demo.style.setProperty('--demo-columns',String(appState.cols));
-    for(let i=0;i<appState.cols*2;i++)demo.append(document.createElement('span'));
-    body.append(demo);intro('3 columns = larger tiles. 6 columns = more icons. The choice is saved.');return;
+  if(kind==='grid-home'||kind==='grid-apps'||kind==='grid-folders'){
+    const types={'grid-home':'HOME SCREEN GRID','grid-apps':'APPS SCREEN GRID','grid-folders':'FOLDER GRID'};
+    title.textContent=types[kind];
+    intro('Choose the number of columns and rows, like Samsung Home settings. Each grid saves separately.');
+    const config=document.createElement('div');config.className='grid-picker-settings';
+    for(const axis of ['cols','rows']){
+      const wrapper=document.createElement('div');
+      const label=document.createElement('strong');label.textContent=axis==='cols'?'COLUMNS':'ROWS';
+      const stepper=document.createElement('div');stepper.className='grid-stepper';
+      const minus=document.createElement('button');minus.textContent='−';minus.setAttribute('aria-label','Reduce '+axis);
+      const count=document.createElement('span');count.textContent=gridValue(kind,axis);
+      const plus=document.createElement('button');plus.textContent='＋';plus.setAttribute('aria-label','Increase '+axis);
+      minus.onclick=()=>setGridDimension(kind,axis,gridValue(kind,axis)-1);
+      plus.onclick=()=>setGridDimension(kind,axis,gridValue(kind,axis)+1);
+      stepper.append(minus,count,plus);wrapper.append(label,stepper);config.append(wrapper);
+    }
+    body.append(config);
+    const cols=gridValue(kind,'cols'),rows=gridValue(kind,'rows');
+    const caption=document.createElement('div');caption.className='grid-preview-description';
+    caption.textContent=cols+' × '+rows+' / '+(cols*rows)+' CELLS';body.append(caption);
+    const preview=document.createElement('div');preview.className='picker-grid-demo';
+    preview.style.setProperty('--demo-columns',String(cols));
+    for(let i=0;i<cols*rows;i++)preview.append(document.createElement('span'));
+    body.append(preview);
+    intro(kind==='grid-home'?'Wide MEK-AI widgets automatically occupy multiple cells. Extra icons flow to another home page.':kind==='grid-apps'?'Apps will paginate horizontally across full rows and columns.':'Changes take effect for folders you create in MEK-AI Mobile.');
+    return;
   }
   if(kind==='themes'){
     title.textContent='TERMINAL THEMES';
@@ -569,7 +802,7 @@ function mekAppsReady(json){
 /* A horizontally paged drawer like a conventional Android launcher.
    Only the current page and its neighbors are populated to avoid UI freezes. */
 function getDrawerPageSize(){
-  return window.innerHeight > 0 && window.innerHeight <= 660 ? 20 : 25;
+  return appState.appCols*appState.appRows;
 }
 function renderApps(resetPage=false){
   if(appState.route!=='drawer')return;
@@ -587,6 +820,8 @@ function renderApps(resetPage=false){
   for(let i=0;i<appState.pageCount;i++){
     const page=document.createElement('div');
     page.className='app-page';
+    page.style.setProperty('--app-cols',String(appState.appCols));
+    page.style.setProperty('--app-rows',String(appState.appRows));
     page.dataset.pageIndex=String(i);
     page.setAttribute('role','group');
     page.setAttribute('aria-label','Applications page '+(i+1)+' of '+appState.pageCount);
@@ -679,8 +914,9 @@ function setupAppActions(){
   const host=$('appPageTrack');
   host.addEventListener('click',e=>{
     const button=e.target.closest('.app-button');
-    if(!button||Date.now()<appState.suppressClickUntil)return;
+    if(!button)return;
     if(appState.pickMode){addAppTile(button.dataset.pkg,button.dataset.label);return;}
+    if(Date.now()<appState.suppressClickUntil)return;
     try{if(window.MEK)MEK.launchApp(button.dataset.pkg);}catch(err){}
   });
   host.addEventListener('contextmenu',e=>{
@@ -706,36 +942,84 @@ function closeAppDrawer(){
   if(appState.pickMode){cancelAppPick();return;}
   navigate('home');
 }
+/* Touch events are essential here: Android WebView can cancel pointer
+   events when it starts handling native scrolling, especially swiping up. */
 function setupDrawerGestures(){
-  let touch=null;
-  document.addEventListener('pointerdown',e=>{
-    if(!e.isPrimary && e.pointerType==='touch')return;
+  let gesture=null;
+  function start(x,y,target){
+    if(!target || target.closest('.edit-sheet-overlay,.folder-overlay,.onboard-overlay')){gesture=null;return;}
+    if(target.closest('input,textarea,[contenteditable="true"]')){gesture=null;return;}
     const route=appState.route;
-    if(route==='home'&&!appState.edit){
-      if(e.clientY<window.innerHeight-175)return;
-      if(e.target.closest('input,textarea,.edit-sheet-overlay'))return;
-      touch={route,x:e.clientX,y:e.clientY,time:Date.now()};
-    }else if(route==='drawer'){
-      if(e.target.closest('input,.drawer-pick-hint'))return;
-      touch={route,x:e.clientX,y:e.clientY,time:Date.now()};
+    if(route==='home' && appState.edit){gesture=null;return;}
+    gesture={x,y,route,time:Date.now()};
+  }
+  function finish(x,y){
+    const p=gesture;gesture=null;
+    if(!p||Date.now()-p.time>1700||p.route!==appState.route)return;
+    const dx=x-p.x,dy=y-p.y;
+    if(Math.abs(dx)>66 && Math.abs(dx)>Math.abs(dy)*1.2){
+      if(p.route==='drawer')return; // Native scroll-snap owns app pages.
+      appState.suppressClickUntil=Date.now()+400;
+      navigateHorizontal(dx<0?1:-1);
+      return;
     }
+    if(Math.abs(dy)>68 && Math.abs(dy)>Math.abs(dx)*1.25){
+      if(p.route==='home' && dy<0 && !appState.edit){
+        appState.suppressClickUntil=Date.now()+400;
+        openAppDrawer();
+      }else if(p.route==='drawer' && dy>0){
+        appState.suppressClickUntil=Date.now()+400;
+        closeAppDrawer();
+      }
+    }
+  }
+  document.addEventListener('touchstart',e=>{
+    if(e.touches.length!==1){gesture=null;return;}
+    const t=e.touches[0];
+    start(t.clientX,t.clientY,e.target);
+  },{passive:true});
+  document.addEventListener('touchend',e=>{
+    if(!e.changedTouches.length)return;
+    const t=e.changedTouches[0];
+    finish(t.clientX,t.clientY);
+  },{passive:true});
+  document.addEventListener('touchcancel',()=>{gesture=null;},{passive:true});
+  // Browser-side testing and mouse gestures on larger tablets.
+  document.addEventListener('pointerdown',e=>{
+    if(e.pointerType==='touch')return;
+    start(e.clientX,e.clientY,e.target);
   },{passive:true});
   document.addEventListener('pointerup',e=>{
-    const p=touch;touch=null;
-    if(!p||Date.now()-p.time>1100)return;
-    const dx=e.clientX-p.x,dy=e.clientY-p.y;
-    if(Math.abs(dx)>75)return;
-    if(p.route==='home'&&appState.route==='home'&&!appState.edit&&dy< -70){
-      appState.suppressClickUntil=Date.now()+400;
-      openAppDrawer();
-    }else if(p.route==='drawer'&&appState.route==='drawer'&&dy>100){
-      closeAppDrawer();
-    }
+    if(e.pointerType==='touch')return;
+    finish(e.clientX,e.clientY);
   },{passive:true});
-  document.addEventListener('pointercancel',()=>{touch=null;},{passive:true});
+  document.addEventListener('pointercancel',()=>{gesture=null;},{passive:true});
+  // A swipe should never accidentally activate the icon underneath it.
+  document.addEventListener('click',e=>{
+    if(Date.now()<appState.suppressClickUntil){
+      e.preventDefault();e.stopImmediatePropagation();
+    }
+  },true);
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape'&&appState.route==='drawer'&&!e.target.matches('input'))closeAppDrawer();
+    if(e.target.matches('input,textarea'))return;
+    if(e.key==='ArrowLeft'&&appState.route!=='drawer')navigateHorizontal(1);
+    if(e.key==='ArrowRight'&&appState.route!=='drawer')navigateHorizontal(-1);
   });
+  // Folder pages have the same simple sideways gesture.
+  let folderTouch=null;
+  const overlay=$('folderOverlay');
+  overlay.addEventListener('touchstart',e=>{
+    if(e.touches.length!==1)return;
+    const t=e.touches[0];folderTouch={x:t.clientX,y:t.clientY};
+  },{passive:true});
+  overlay.addEventListener('touchend',e=>{
+    if(!folderTouch||!e.changedTouches.length)return;
+    const t=e.changedTouches[0],dx=t.clientX-folderTouch.x,dy=t.clientY-folderTouch.y;folderTouch=null;
+    if(Math.abs(dx)>55 && Math.abs(dx)>Math.abs(dy)*1.25){
+      goToFolderPage(appState.folderPageIndex+(dx<0?1:-1));
+    }
+  },{passive:true});
 }
 let dismissedHomeSetup=false;
 function checkHomeStatus(){
@@ -768,9 +1052,10 @@ window.addEventListener('DOMContentLoaded',()=>{
   setupAppActions();
   setupDrawerGestures();
   applyPrefs();setGreeting();
+  updateGridSummaries();
   document.body.classList.add('on-home');
   renderHome();updateDate();updateBattery();checkHomeStatus();
-  if($('settingsGridCount'))$('settingsGridCount').textContent=String(appState.cols);
+  updatePageRail();
   $('wallpaperToggle').addEventListener('change',e=>{storageSet(STORAGE.wallpaper,e.target.checked);applyPrefs();});
   $('motionToggle').addEventListener('change',e=>{storageSet(STORAGE.motion,e.target.checked);applyPrefs();});
   setInterval(()=>{updateDate();updateBattery();},45000);
@@ -794,3 +1079,12 @@ window.setGridColumns=setGridColumns;
 window.setTheme=setTheme;
 window.requestMakeHome=requestMakeHome;
 window.dismissHomeOnboarding=dismissHomeOnboarding;
+window.goToHomePage=goToHomePage;
+window.navigateHorizontal=navigateHorizontal;
+window.addHomePage=addHomePage;
+window.createFolder=createFolder;
+window.openFolder=openFolder;
+window.closeFolder=closeFolder;
+window.addAppToFolder=addAppToFolder;
+window.setGridDimension=setGridDimension;
+window.goToFolderPage=goToFolderPage;

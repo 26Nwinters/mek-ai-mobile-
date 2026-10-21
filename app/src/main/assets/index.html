@@ -24,20 +24,18 @@
       <div id="editToolbar" class="edit-toolbar hidden">
         <div class="edit-toolbar-top"><span>✳ PERSONALIZE HOME</span><button onclick="exitEditMode()" class="edit-done">DONE ✓</button></div>
         <div class="edit-toolbar-actions">
-          <button onclick="openEditor('widgets')">＋ WIDGETS</button>
-          <button onclick="openEditor('apps')">▦ APPS</button>
-          <button onclick="openEditor('grid')">▥ GRID</button>
+          <button onclick="openEditor('widgets')">＋ WIDGET</button>
+          <button onclick="openEditor('apps')">＋ APP</button>
+          <button onclick="createFolder()">＋ FOLDER</button>
+          <button onclick="addHomePage()">＋ PAGE</button>
+          <button onclick="openEditor('grid-home')">▥ GRID</button>
           <button onclick="openEditor('themes')">◐ THEME</button>
         </div>
       </div>
-      <div id="homeGrid" class="launcher-grid" role="list" aria-label="Arrangeable home screen tiles"></div>
-      <div id="homeHelp" class="grid-instruction">HOLD AN EMPTY SPOT OR A TILE TO CUSTOMIZE <span>✳</span></div>
+      <div id="homeGrid" class="launcher-grid" role="region" aria-label="Horizontally swipeable home screen tiles"></div>
+      <div id="homeHelp" class="grid-instruction">SWIPE UP FOR APPS · SWIPE SIDEWAYS FOR PAGES <span>✳</span></div>
       <div class="home-bottom-note">WHERE STORIES TAKE ROOT. <span>✳</span></div>
     </section>
-    <button id="appSwipeHandle" type="button" class="app-swipe-handle" onclick="openAppDrawer()" aria-label="Swipe up or tap to open all apps">
-      <span class="handle-chevron">⌃</span><span>SWIPE UP · ALL APPS</span>
-    </button>
-
     <section id="view-drawer" class="view drawer-view" aria-label="Swipeable app drawer">
       <div class="drawer-heading-row">
         <div><div class="page-eyebrow">YOUR DEVICE / ALL APPLICATIONS</div><h1>APP <em>ARCHIVE</em></h1></div>
@@ -45,7 +43,7 @@
       </div>
       <div class="search-wrapper drawer-search"><span>⌕</span><input id="appSearch" type="search" placeholder="Search installed apps" autocomplete="off"></div>
       <div id="appDrawerModeHint" class="drawer-pick-hint hidden">SELECT AN APP TO PIN TO YOUR HOME SCREEN <button onclick="cancelAppPick()">CANCEL</button></div>
-      <div class="drawer-description"><span id="appCount">LOADING APPS</span><span>SWIPE LEFT OR RIGHT ↔</span></div>
+      <div class="drawer-description"><span id="appCount">LOADING APPS</span><span>SWIPE SIDEWAYS TO BROWSE</span></div>
       <div id="appPages" class="app-pages" aria-label="Application pages">
         <div id="appPageTrack" class="app-page-track"></div>
       </div>
@@ -103,11 +101,14 @@
         <label class="setting-row"><span><b>ATMOSPHERIC WALLPAPER</b><small>Keep the workshop behind the interface</small></span><input type="checkbox" id="wallpaperToggle" checked><i></i></label>
         <label class="setting-row"><span><b>REDUCE ANIMATIONS</b><small>Use less movement around MEK-AI</small></span><input type="checkbox" id="motionToggle"><i></i></label>
       </div>
-      <div class="section-title"><span>HOME SCREEN GRID</span><span class="muted micro-label">ADJUST LAYOUT</span></div>
-      <div class="tile layout-settings">
-        <div><b>COLUMNS PER ROW</b><small>3 to 6 tile slots across the screen</small></div>
-        <div class="grid-stepper"><button onclick="changeColumns(-1)" aria-label="Decrease grid columns">−</button><span id="settingsGridCount">4</span><button onclick="changeColumns(1)" aria-label="Increase grid columns">＋</button></div>
-        <button class="outline-action" onclick="enterEditMode(true)">ARRANGE WIDGETS & APPS ↗</button>
+      <div class="section-title"><span>SCREEN GRIDS</span><span class="muted micro-label">COLUMNS × ROWS</span></div>
+      <div class="tile settings-list">
+        <button class="setting-link" onclick="openEditor('grid-home')"><span><b>HOME SCREEN GRID</b><small>How many cells on each home page</small></span><span id="homeGridSummary">4×6 ↗</span></button>
+        <button class="setting-link" onclick="openEditor('grid-apps')"><span><b>APPS SCREEN GRID</b><small>Icons per page in your app drawer</small></span><span id="appsGridSummary">5×6 ↗</span></button>
+        <button class="setting-link" onclick="openEditor('grid-folders')"><span><b>FOLDER GRID</b><small>Icons shown inside each folder</small></span><span id="foldersGridSummary">4×4 ↗</span></button>
+      </div>
+      <div class="tile layout-settings" style="margin-top:12px">
+        <button class="outline-action" onclick="enterEditMode(true)">ARRANGE WIDGETS, FOLDERS & APPS ↗</button>
       </div>
       <div class="section-title"><span>TERMINAL THEMES</span><span class="muted micro-label">COLOR VARIANTS</span></div>
       <div id="themeChoices" class="theme-choices">
@@ -121,7 +122,7 @@
         <button class="setting-link" onclick="MEK.openDefault('home')"><span><b>MANAGE HOME APPS</b><small>Switch back to One UI Home whenever you like</small></span><span>↗</span></button>
         <button class="setting-link" onclick="MEK.openDefault('settings')"><span><b>ANDROID SETTINGS</b><small>Regular system settings remain available</small></span><span>↗</span></button>
       </div>
-      <div class="section-title"><span>ABOUT</span><span class="muted micro-label">VERSION 0.3.0</span></div>
+      <div class="section-title"><span>ABOUT</span><span class="muted micro-label">VERSION 0.4.0</span></div>
       <div class="tile about-card">
         <div class="micro-label warm">MEK-AI MOBILE / ALPHA</div>
         <h2>AN OVERGROWN LITTLE OS.</h2>
@@ -139,12 +140,20 @@
       </div>
     </div>
 
-        <nav id="bottomNav" class="bottom-nav" aria-label="Mobile navigation">
-      <button class="nav-item on" data-route="home" onclick="navigate('home')"><span class="nav-icon">⌂</span><span>HOME</span></button>
-      <button class="nav-item companion-nav" data-route="mek" onclick="navigate('mek')"><span class="nav-icon">◧</span><span>MEK-AI</span></button>
-      <button class="nav-item" data-route="controls" onclick="navigate('controls')"><span class="nav-icon">⌁</span><span>CONTROL</span></button>
-      <button class="nav-item" data-route="settings" onclick="navigate('settings')"><span class="nav-icon">⚙</span><span>SETUP</span></button>
-    </nav>
+    <div id="pageRail" class="page-rail" aria-label="Swipeable home pages">
+      <div id="pageRailLabel" class="page-rail-label">HOME / 1</div>
+      <div id="pageRailDots" class="page-rail-dots"></div>
+      <div id="pageRailHint" class="page-rail-hint">↑ APPS</div>
+    </div>
+    <div id="folderOverlay" class="folder-overlay hidden" role="dialog" aria-modal="true" aria-label="App folder">
+      <div class="folder-backdrop" onclick="closeFolder()"></div>
+      <div class="folder-panel">
+        <div class="folder-head"><input id="folderName" type="text" maxlength="35" aria-label="Folder name"/><button onclick="closeFolder()" aria-label="Close folder">✕</button></div>
+        <div id="folderPages" class="folder-pages"><div id="folderPageTrack" class="folder-page-track"></div></div>
+        <div id="folderPageDots" class="app-page-dots"></div>
+        <button id="folderAdd" class="outline-action" onclick="addAppToFolder()">＋ ADD APPLICATION</button>
+      </div>
+    </div>
   </div>
   <div id="homeOnboarding" class="onboard-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="onboardTitle">
     <div class="onboard-panel">

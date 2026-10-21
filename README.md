@@ -1,3 +1,30 @@
+# MEK-AI Mobile v0.4.0 — swipeable home pages and Samsung-style grids
+
+This is a genuine Android Home launcher (not a firmware replacement), designed for the Galaxy S10+ and Android 12.
+
+## Phone behavior
+
+- **No permanent bottom navigation buttons.** A small page-dot indicator shows MEK-AI, your Home pages, House, and Setup.
+- **Swipe right** from the first Home page to MEK-AI, or **swipe left** for the next customizable Home page; swiping left beyond your last Home page leads to House and Setup.
+- **Swipe up from the Home screen** for the app drawer, then **swipe left or right** to switch app pages. Swipe down to close it. This uses real touch events on Android, instead of only a small edge hotspot.
+- Hold the Home screen to enable jiggle/edit mode, then add widgets, apps, folders or another home page.
+- App shortcuts added from the edit-mode picker are saved, displayed on the correct Home page, and show a confirmation.
+- **Separate grid settings:** default Home **4×6**, Apps **5×6**, and Folders **4×4**, with independent adjustable rows and columns. Widgets occupy multiple grid cells.
+- Folders can be created, renamed, filled with real installed apps and opened. Long-press an app in a folder to remove it.
+- Your existing v0.3 home tiles, tasks, wallpaper setting, and theme are migrated where possible. The old redundant “All apps” home tile is removed.
+
+## Installation
+
+Download the v0.4.0 APK from [GitHub Actions](https://github.com/26Nwinters/mek-ai-mobile-/actions/workflows/android.yml) or the attachment in ChatGPT. This remains an alpha: test on your S10+ while keeping Samsung One UI Home available under **Settings → Apps → Choose default apps → Home app**.
+
+**Caution:** APKs built on the GitHub-hosted debug signing key may require uninstalling the previous alpha before installing a new one. This deletes the older alpha's locally stored data. Do not uninstall One UI Home. Persistently signing future builds requires a private key stored securely, not inside this public repository.
+
+## Verification
+
+GitHub Actions runs the Node tests for physical grid packing, page swipes, folders, pinning apps, settings, and tab switching, then compiles the native APK. That does not substitute for touch testing on a physical Samsung device.
+
+---
+
 # MEK-AI Mobile v0.3.0 — gesture-based app archive
 
 The editable overgrown industrial launcher now follows the Android/Samsung-style interaction shown in the user's October 21 screen recording.
