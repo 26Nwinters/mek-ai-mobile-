@@ -44,6 +44,7 @@
 #systemExperience .sys-shade-handle{text-align:center;font-size:12px;letter-spacing:.1em;color:#817a6c;padding:0 0 18px;cursor:pointer}
 #systemExperience .sys-shade-date{font:10px/1.5 monospace;color:var(--sys-accent);letter-spacing:.14em}
 #systemExperience .sys-shade-top{display:flex;justify-content:space-between;align-items:center;margin:2px 0 24px}
+#systemExperience .sys-top-actions{display:flex;gap:8px}
 #systemExperience .sys-shade-top button{font-size:25px;width:46px;height:46px;border-radius:50%;background:#202d24;border:1px solid var(--sys-edge);color:var(--sys-accent)}
 #systemExperience .sys-shade-clock{font-size:53px;font-weight:280;letter-spacing:-.06em;line-height:1.15;font-variant-numeric:tabular-nums}
 #systemExperience .sys-quick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
