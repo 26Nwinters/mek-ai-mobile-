@@ -68,7 +68,7 @@ test('v0.6.2 always restores Android widgets after edit, with versioned atomic l
   assert.match(java,/boolean allowed=input\.optBoolean\("allow",false\)/);
   assert.match(java,/setNativeWidgetLayerActive\(allowed,revision\)/);
   assert.match(java,/setWidgetLayerActive\(boolean allowed,int revision\)/);
-  assert.match(java,/view\.setVisibility\(View\.GONE\)/);
+  assert.match(java,/view\.setVisibility\(View\.INVISIBLE\)/);
   assert.match(java,/hostView\.setVisibility\(View\.VISIBLE\)/);
   assert.match(java,/(?:hostView|view)\.setBackgroundColor\(android\.graphics\.Color\.TRANSPARENT\)/);
   assert.match(java,/reportWidgetStatus\(id,"attached"\)/);
@@ -96,4 +96,26 @@ test('resizable Android and built-in widgets have three independent handles',()=
   const core=read('app/src/main/assets/launcher-core.js');
   assert.match(core,/out\.frameStyle/);
   assert.match(core,/\['widget','android-widget','stack'\]\.includes\(item\.type\)\)\?clamp\(item\.h/);
+});
+
+test('v0.6.4 retains RemoteViews host state instead of animating live provider content',()=>{
+  const js=read('app/src/main/assets/launcher-v5.js');
+  assert.doesNotMatch(js,/native\.animateWidgetPageTransition\(/,
+    'provider windows should never be moved to off-screen coordinates');
+  assert.doesNotMatch(java,/void animateNativeWidgetPageTransition\(/);
+  assert.doesNotMatch(java,/@JavascriptInterface public void animateWidgetPageTransition\(/);
+  assert.match(java,/view\.setVisibility\(View\.INVISIBLE\)/);
+  assert.match(java,/entry\.getValue\(\)\.setVisibility\(View\.INVISIBLE\)/);
+  assert.match(java,/hostView\.setAlpha\(1f\)/);
+  assert.match(java,/hostView\.invalidate\(\)/);
+  assert.match(js,/nativePageTransitionActive/);
+  assert.match(js,/nativePageTransitionTimer=setTimeout/);
+});
+
+test('folder labels stay contained inside each app grid slot',()=>{
+  const css=read('app/src/main/assets/launcher-v5.css');
+  assert.match(css,/\.folder-cell\{[^}]*overflow:hidden/);
+  assert.match(css,/\.folder-cell \.icon-tile\{[^}]*width:100%/);
+  assert.match(css,/\.folder-cell \.icon-label\{[^}]*-webkit-line-clamp:2/);
+  assert.match(css,/\.folder-cell \.icon-label\{[^}]*overflow-wrap:anywhere/);
 });
