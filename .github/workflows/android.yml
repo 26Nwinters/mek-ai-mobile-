@@ -2,7 +2,9 @@ name: Build MEK-AI Mobile APK
 
 on:
   push:
-    branches: [main, integrated-oneui-v0.6, fix-v0.6.1-widget-overlay, fix-v0.6.2-native-widget-restore]
+    branches: [main, perf-v0.6.3-launcher-responsiveness]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -68,7 +70,7 @@ jobs:
         if: env.MEK_STABLE_SIGNING == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: MEK-AI-Mobile-v0.6.2-STABLE-KEY-debug
+          name: MEK-AI-Mobile-v0.6.3-STABLE-KEY-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -76,6 +78,6 @@ jobs:
         if: env.MEK_STABLE_SIGNING != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: MEK-AI-Mobile-v0.6.2-TEMPORARY-KEY-test-only
+          name: MEK-AI-Mobile-v0.6.3-TEMPORARY-KEY-test-only
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
