@@ -114,6 +114,11 @@ const Mek={
   },
   setView(route,options={}){
     if(!['home','drawer','assistant','house','settings'].includes(route))route='home';
+    // Navigating away cancels any pending home-page widget restoration.
+    // Returning Home issues its own authoritative snapshot instead.
+    clearTimeout(this.nativePageTransitionTimer);
+    this.nativePageTransitionTimer=null;
+    this.nativePageTransitionActive=false;
     if(this.sheet)this.closeSheet();
     if(this.activeFolder)this.closeFolder();
     if(route!=='drawer'&&this.selectMode)this.disableLibrarySelection();
@@ -165,44 +170,6 @@ const Mek={
     this.persist();this.renderHome();this.renderDock();
     this.scheduleWidgetSync();
   },
-  animateNativePageSwitch(fromIndex,toIndex){
-    const native=this.native();
-    if(typeof native?.animateWidgetPageTransition!=='function' ||
-       this.view!=='home'||this.edit||!this.model.settings.motion||
-       !this.canShowNativeWidgets()||Math.abs(toIndex-fromIndex)!==1)return false;
-    const track=$('homeTrack');
-    const pageWidth=track?.getBoundingClientRect().width||window.innerWidth;
-    if(!Number.isFinite(pageWidth)||pageWidth<100)return false;
-    const widgets=[];
-    for(const index of [fromIndex,toIndex]){
-      const page=this.model.pages[index];
-      const surface=Array.from(track.children).find(n=>n.dataset.page===page.id);
-      if(!surface||surface.dataset.mounted!=='true')return false;
-      for(const item of page.items){
-        if(item.type!=='android-widget')continue;
-        const node=Array.from(surface.querySelectorAll('.grid-cell'))
-          .find(n=>n.dataset.uid===item.id);
-        if(!node)return false;
-        const rect=node.getBoundingClientRect();
-        if(!Number.isFinite(rect.left)||!Number.isFinite(rect.top)||
-          rect.width<40||rect.height<40)return false;
-        widgets.push({id:item.nativeId,x:rect.left,y:rect.top,w:rect.width,
-          h:rect.height,incoming:index===toIndex});
-      }
-    }
-    if(!widgets.length)return false;
-    // CSS and native widgets share the same 240ms easing and slide distance.
-    // The Android host animates its real AppWidgetHostViews rather than
-    // chasing each WebView frame with delayed layout measurements.
-    try{
-      const revision=this.nextNativeWidgetRevision();
-      native.animateWidgetPageTransition(JSON.stringify({
-        revision,viewportWidth:window.innerWidth,dx:(fromIndex-toIndex)*pageWidth,
-        durationMs:240,widgets
-      }));
-      return true;
-    }catch(e){return false;}
-  },
   goPage(id){
     const index=this.model.pages.findIndex(p=>p.id===id);
     if(index<0)return;
@@ -212,25 +179,40 @@ const Mek={
       this.scheduleWidgetSync();
       return;
     }
-    this.model.current=id;
-    // Populate both adjacent pages before measuring native widget geometry.
-    this.hydrateHomePages?.();
-    const animated=this.animateNativePageSwitch(oldIndex,index);
-    const track=$('homeTrack');
-    if(track)track.style.transform='translate3d(-'+(index*100)+'%,0,0)';
-    this.renderPageDots();
-    this.persist();
-    if(animated){
+    // A v0.6.3 regression animated actual Android RemoteViews off-screen.
+    // Some providers kept their click surface but stopped drawing content.
+    // Keep native widgets at real on-screen rectangles; hide during the
+    // WebView slide and restore the destination in one versioned snapshot.
+    clearTimeout(this.nativePageTransitionTimer);
+    this.nativePageTransitionTimer=null;
+    const touchingWidgets=[oldIndex,index].some(i=>
+      this.model.pages[i]?.items.some(item=>item.type==='android-widget'));
+    const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches===true;
+    const deferNative=this.view==='home'&&this.model.settings.motion&&!reducedMotion&&
+      Math.abs(index-oldIndex)===1&&touchingWidgets;
+    this.nativePageTransitionActive=deferNative;
+    if(deferNative){
+      // Block touch surfaces as well as drawing, preventing invisible widgets
+      // from intercepting taps while the WebView finishes its own animation.
+      this.updateNativeWidgetLayer(false);
       clearTimeout(this.nativeWidgetTimer);
       clearTimeout(this.nativeWidgetFollowup);
       clearTimeout(this.nativeWidgetRecoveryTimer);
       clearTimeout(this.nativeWidgetStatusTimer);
-      // Commit final native positions after the matching CSS transition.
-      this.nativeWidgetTimer=setTimeout(()=>this.syncNativeWidgets(true),260);
-      this.nativeWidgetFollowup=setTimeout(()=>this.syncNativeWidgets(true),410);
-      this.nativeWidgetRecoveryTimer=setTimeout(()=>this.syncNativeWidgets(true),1400);
+    }
+    this.model.current=id;
+    this.hydrateHomePages?.();
+    const track=$('homeTrack');
+    if(track)track.style.transform='translate3d(-'+(index*100)+'%,0,0)';
+    this.renderPageDots();
+    this.persist();
+    if(deferNative){
+      this.nativePageTransitionTimer=setTimeout(()=>{
+        this.nativePageTransitionTimer=null;
+        this.nativePageTransitionActive=false;
+        this.scheduleWidgetSync();
+      },260);
     }else{
-      // Long jumps and reduced-motion mode use the established atomic sync.
       this.scheduleWidgetSync();
     }
   },
@@ -375,7 +357,8 @@ const Mek={
     }catch(e){}
   },
   canShowNativeWidgets(){
-    return this.view==='home'&&!this.edit&&!this.sheet&&!this.activeFolder&&!this.drag&&
+    return this.view==='home'&&!this.nativePageTransitionActive&&
+      !this.edit&&!this.sheet&&!this.activeFolder&&!this.drag&&
       ['folderOverlay','sheetOverlay','homeSetup'].every(id=>{
         const overlay=$(id);
         return !overlay||overlay.classList.contains('hidden');
