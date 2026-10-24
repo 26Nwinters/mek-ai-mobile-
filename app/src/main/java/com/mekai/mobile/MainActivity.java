@@ -46,6 +46,9 @@ import android.graphics.drawable.Drawable;
 import android.provider.MediaStore;
 import android.provider.Settings;
 import android.net.Uri;
+import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CameraCharacteristics;
+import android.os.PowerManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -127,6 +130,7 @@ public class MainActivity extends Activity {
         new android.util.LruCache<>(260);
     private static final String TAG = "MEKMobile";
     private static final String HOME = "file:///android_asset/index.html";
+    private boolean torchOn=false;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -223,7 +227,10 @@ public class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
-        if (web != null) web.evaluateJavascript("window.refreshNative && window.refreshNative()", null);
+        if (web != null) {
+            web.evaluateJavascript("window.refreshNative && window.refreshNative()", null);
+            web.evaluateJavascript("window.mekSystemRefresh && window.mekSystemRefresh()", null);
+        }
     }
 
     @Override public void onBackPressed() {
@@ -679,6 +686,59 @@ public class MainActivity extends Activity {
     }
 
     public class PhoneBridge {
+        @JavascriptInterface public boolean notificationAccessGranted() {
+            try {
+                String enabled=Settings.Secure.getString(getContentResolver(),
+                    "enabled_notification_listeners");
+                String target=new ComponentName(MainActivity.this,MekNotificationListener.class)
+                    .flattenToString();
+                if(enabled==null)return false;
+                for(String component:enabled.split(":"))if(component.equals(target))return true;
+            }catch(Exception ignored){}
+            return false;
+        }
+        @JavascriptInterface public void openNotificationAccess(){
+            runOnUiThread(()->safeStart(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)));
+        }
+        @JavascriptInterface public String getNotifications(){
+            if(!notificationAccessGranted())return "[]";
+            return MekNotificationListener.snapshot().toString();
+        }
+        @JavascriptInterface public void openNotification(String key){
+            if(!notificationAccessGranted()||key==null||key.length()>500)return;
+            runOnUiThread(()->MekNotificationListener.open(key));
+        }
+        @JavascriptInterface public void dismissNotification(String key){
+            if(!notificationAccessGranted()||key==null||key.length()>500)return;
+            MekNotificationListener.dismiss(key);
+        }
+        @JavascriptInterface public boolean isTorchOn(){return torchOn;}
+        @JavascriptInterface public String toggleTorch(){
+            try {
+                CameraManager manager=(CameraManager)getSystemService(Context.CAMERA_SERVICE);
+                if(manager==null)return "unavailable";
+                for(String camera:manager.getCameraIdList()){
+                    Boolean available=manager.getCameraCharacteristics(camera).get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+                    Integer facing=manager.getCameraCharacteristics(camera).get(CameraCharacteristics.LENS_FACING);
+                    if(Boolean.TRUE.equals(available)&&CameraCharacteristics.LENS_FACING_BACK==facing){
+                        boolean next=!torchOn;
+                        manager.setTorchMode(camera,next);
+                        torchOn=next;
+                        return next?"on":"off";
+                    }
+                }
+            }catch(Exception e){Log.w(TAG,"Torch unavailable",e);}
+            return "unavailable";
+        }
+        @JavascriptInterface public void setAppBrightness(int percent){
+            final float level=Math.max(.1f,Math.min(1f,percent/100f));
+            runOnUiThread(()->{
+                android.view.WindowManager.LayoutParams params=getWindow().getAttributes();
+                params.screenBrightness=level;
+                getWindow().setAttributes(params);
+            });
+        }
+
         @JavascriptInterface public boolean isDefaultHome() {
             return isSelectedHome();
         }
@@ -948,6 +1008,11 @@ public class MainActivity extends Activity {
                     case "display": safeStart(new Intent(Settings.ACTION_DISPLAY_SETTINGS)); break;
                     case "battery": safeStart(new Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS)); break;
                     case "home": safeStart(new Intent(Settings.ACTION_HOME_SETTINGS)); break;
+                    case "airplane": safeStart(new Intent(Settings.ACTION_AIRPLANE_MODE_SETTINGS)); break;
+                    case "dnd": safeStart(new Intent(Settings.ACTION_ZEN_MODE_PRIORITY_SETTINGS)); break;
+                    case "volume": safeStart(new Intent(Settings.ACTION_SOUND_SETTINGS)); break;
+                    case "security": safeStart(new Intent(Settings.ACTION_SECURITY_SETTINGS)); break;
+                    case "apps": safeStart(new Intent(Settings.ACTION_APPLICATION_SETTINGS)); break;
                     default: break;
                 }
             });
