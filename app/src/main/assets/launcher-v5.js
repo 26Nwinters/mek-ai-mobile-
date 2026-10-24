@@ -357,7 +357,7 @@ const Mek={
     }catch(e){}
   },
   canShowNativeWidgets(){
-    return this.view==='home'&&!this.nativePageTransitionActive&&
+    return this.view==='home'&&!document.body.classList.contains('system-experience-open')&&!this.nativePageTransitionActive&&
       !this.edit&&!this.sheet&&!this.activeFolder&&!this.drag&&
       ['folderOverlay','sheetOverlay','homeSetup'].every(id=>{
         const overlay=$(id);
