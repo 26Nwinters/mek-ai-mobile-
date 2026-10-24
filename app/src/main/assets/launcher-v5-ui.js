@@ -239,14 +239,23 @@ M.renderHome=function(){
   this.renderPageDots();this.scheduleWidgetSync();this.scheduleIconDrain();
 };
 M.renderPageDots=function(){
-  const host=$('homePageDots');if(!host)return;host.textContent='';
+  const host=$('homePageDots');if(!host)return;
+  const structure=JSON.stringify(this.model.pages.map(p=>p.id));
+  if(host._pageStructure!==structure||host.children.length!==this.model.pages.length){
+    host.textContent='';
+    this.model.pages.forEach((page,index)=>{
+      const button=document.createElement('button');button.type='button';
+      button.setAttribute('aria-label','Home page '+(index+1));
+      button.onclick=()=>this.goPage(page.id);
+      host.append(button);
+    });
+    host._pageStructure=structure;
+  }
+  // Swiping only changes the active dot; keep the page indicator buttons.
   this.model.pages.forEach((page,index)=>{
-    const button=document.createElement('button');button.type='button';
-    button.className=page.id===this.model.current?'active':'';
-    button.setAttribute('aria-label','Home page '+(index+1));
+    const button=host.children[index];
+    button.classList.toggle('active',page.id===this.model.current);
     button.setAttribute('aria-current',page.id===this.model.current?'page':'false');
-    button.onclick=()=>this.goPage(page.id);
-    host.append(button);
   });
   $('homeEyebrow').textContent='THE HIDEAWAY / HOME '+(this.model.pages.findIndex(p=>p.id===this.model.current)+1);
 };
