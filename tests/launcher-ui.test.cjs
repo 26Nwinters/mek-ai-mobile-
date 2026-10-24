@@ -873,6 +873,9 @@ test('v0.6.3 animates adjacent native widget pages with ordered revisions',async
     x:0,y:0,w:2,h:2,frameStyle:'transparent'
   },destination.id));
   assert.ok(placed);
+  // Core.addHome switches current to the receiving page; reset to source.
+  M.model.current=M.model.pages[0].id;
+  M.renderHome();
   M.goPage(destination.id);
   assert.equal(calls.widgetTransitions.length,1);
   const animation=calls.widgetTransitions[0];
