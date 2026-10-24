@@ -240,7 +240,7 @@ body.editing .home-viewport{overflow:hidden}
 .folder-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:0 0 35px}
 .folder-actions button{color:var(--amber);font:10px 'Consolas',monospace;border:1px solid var(--edge);border-radius:8px;padding:10px}
 .folder-actions span{color:#9dad99;font:8px 'Consolas',monospace}
-.gesture-scrim{position:fixed;z-index:180;pointer-events:none;display:flex;justify-content:center;align-items:center;width:72px;height:84px;opacity:.95;transform:translate(-50%,-50%) scale(1.08);filter:drop-shadow(0 12px 22px #000d)}
+.gesture-scrim{position:fixed;left:0;top:0;z-index:180;pointer-events:none;display:flex;justify-content:center;align-items:center;width:72px;height:84px;opacity:.95;transform:translate3d(-150px,-150px,0) scale(1.08);will-change:transform;filter:drop-shadow(0 12px 22px #000d)}
 .gesture-scrim .icon-tile{width:68px;height:80px}
 .toast{position:fixed;z-index:220;left:50%;bottom:max(94px,calc(94px + var(--bottom-pad)));transform:translateX(-50%);background:rgba(23,38,24,.95);color:var(--light);border:1px solid var(--edge);border-radius:12px;padding:12px 19px;box-shadow:0 9px 25px #000a;font:11px 'Consolas',monospace;max-width:88%;white-space:nowrap;text-align:center}
 .home-setup{align-items:center;padding:22px;background:rgba(0,0,0,.79)}
