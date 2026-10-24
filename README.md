@@ -1,3 +1,30 @@
+# MEK-AI Mobile v0.7.0 — System Experience Prototype
+
+**An interactive Android APK prototype, not a replacement operating system.** Builds on the existing Android Home launcher without changing its storage key, widget bindings, Home model or established MEK-AI art.
+
+## New experience
+
+- **Lock screen preview:** live clock, date, companion artwork, notification count, swipe/tap-to-enter interaction. It is explicitly NOT the secure Android lock screen and does not request, store or validate a PIN.
+- **MEK-AI shade / Quick Settings preview:** swipe down from the launcher top edge or tap SYSTEM in the status header. Expand tiles, adjust **app-window-only brightness**, open Android Wi-Fi/Bluetooth/airplane/Focus/Display controls, and attempt the hardware flashlight. Actual OS status/notification shade still exists.
+- **Notification inbox:** optional Android notification-listener permission, on-device listing of actual active notifications, opening content intents and requesting cancellation. No permission = explanatory empty state. Android maintains actual notification delivery, access and security.
+- **MEK-AI Settings:** search, appearance, clock, privacy, reduced motion, prototype navigation, connectivity, launcher personalization links, access management, and explanations of OS restrictions. Settings saved under `mek_system_v7`, separate from existing `mek_launcher_v5` Home layout.
+- **Prototype navigation:** configurable gesture-bar appearance / three-button controls, Back/Home/Recents screen demo, all scoped inside MEK-AI. Physical Android Back still navigates correctly.
+- **MEK-AI visual system:** amber or moss accents, dark graphite, weathered industrial materials, original `mek.webp` and `workshop.webp` artwork, responsive panels.
+
+## Try it on Appetize.io
+
+Upload the GitHub Actions debug APK using Appetize's Android APK uploader. Choose Android 12+ with a supported device profile. Tap **◈ SYSTEM** in MEK-AI's top status header, or swipe down from the Home top edge. The panel's lock symbol opens the preview lock screen; the gear opens Settings. Grant Android notification access only if you want notifications in MEK-AI. For a real launcher test, choose MEK-AI as the Home app if the simulator supports Home role switching.
+
+**Testing limits:** A cloud Android emulator may have no flashlight, installed third-party widget providers, or real incoming notifications. Quick Settings tiles which Android restricts intentionally open the platform settings screen. Do not mistake visual prototypes for security controls. Do not use the simulated lock screen to protect sensitive information.
+
+## Validation
+
+CI runs Node/jsdom tests including System Experience interactions, release metadata/security validation, and Android SDK 36 Gradle compilation. These do not verify real Samsung hardware behavior. v0.7.0 Android versionCode 17, minimum Android API 31, targeting API 36.
+
+**Signing / upgrade caution:** Unless the repository owner supplies the same persistent debug keystore secret `MEK_DEBUG_KEYSTORE_B64`, Actions test APKs use ephemeral keys. An APK signed with another key cannot update your currently installed copy. Export your existing launcher layout before uninstalling or migrating. Reinstalling may require adding third-party Android widgets again. Keep Samsung One UI Home available as the fallback.
+
+---
+
 # MEK-AI Mobile v0.6.4 — Native widget rendering and folder labels
 
 **Experimental Android beta.** This repair responds to native third-party widgets whose touch targets work but whose visual content sometimes remains blank on v0.6.3. All existing Home layout data and native widget IDs are retained.
