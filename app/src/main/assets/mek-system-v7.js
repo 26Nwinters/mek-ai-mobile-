@@ -50,7 +50,7 @@ function tile([name,title,kind,hint]){
 function shadeView(){
  const items=TILES.slice(0,S.expanded?8:4);
  return '<section class="sys-shade"><div class="sys-shade-handle" data-sys-expand>━━━━━━</div>'+
- '<div class="sys-shade-date">'+date().toUpperCase()+'</div><div class="sys-shade-top"><div class="sys-shade-clock">'+time()+'</div><button data-sys-view="settings" title="MEK-AI Settings">⚙</button></div>'+
+ '<div class="sys-shade-date">'+date().toUpperCase()+'</div><div class="sys-shade-top"><div class="sys-shade-clock">'+time()+'</div><div class="sys-top-actions"><button data-sys-view="lock" title="Lock-screen preview" aria-label="Open lock-screen preview">▣</button><button data-sys-view="settings" title="MEK-AI Settings" aria-label="MEK-AI Settings">⚙</button></div></div>'+
  '<div class="sys-quick-grid">'+items.map(tile).join('')+'</div>'+
  '<div class="sys-brightness"><span>☼</span><input aria-label="MEK-AI display brightness" type="range" min="10" max="100" value="'+prefs.brightness+'" data-sys-brightness><span>◐</span></div>'+
  '<div class="sys-shade-row"><button data-sys-expand>'+(S.expanded?'SHOW LESS':'ALL QUICK SETTINGS')+'　'+(S.expanded?'⌃':'⌄')+'</button><button data-sys-view="notifications">NOTIFICATIONS　↗</button></div>'+
@@ -161,8 +161,8 @@ function nativeTile(kind){
  if(kind==='home-settings'){close();window.Mek?.setView('settings');return;}
  if(kind==='notification-access'){invoke('openNotificationAccess');toast('ANDROID NOTIFICATION ACCESS SETTINGS OPENED');return;}
  if(kind==='torch'){
-   const result=invoke('toggleTorch');if(result===null)toast('FLASHLIGHT UNAVAILABLE IN THIS DEVICE OR EMULATOR');
-   else toast(result?'FLASHLIGHT ON':'FLASHLIGHT OFF');return;
+   const result=invoke('toggleTorch');if(result===null||result==='unavailable')toast('FLASHLIGHT UNAVAILABLE IN THIS DEVICE OR EMULATOR');
+   else toast(result==='on'?'FLASHLIGHT ON':'FLASHLIGHT OFF');return;
  }
  if(mapped[kind]){invoke('openDefault',mapped[kind]);return;}
  toast('DEVICE CONTROL NOT AVAILABLE');
