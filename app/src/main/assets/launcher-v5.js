@@ -207,7 +207,11 @@ const Mek={
     const index=this.model.pages.findIndex(p=>p.id===id);
     if(index<0)return;
     const oldIndex=this.model.pages.findIndex(p=>p.id===this.model.current);
-    if(oldIndex===index)return;
+    if(oldIndex===index){
+      this.renderPageDots();
+      this.scheduleWidgetSync();
+      return;
+    }
     this.model.current=id;
     // Populate both adjacent pages before measuring native widget geometry.
     this.hydrateHomePages?.();
