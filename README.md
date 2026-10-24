@@ -1,3 +1,24 @@
+# MEK-AI Mobile v0.6.3 — Launcher responsiveness update
+
+**Experimental Android beta.** This release targets sluggish folder opening, app-library access, icon movement, and third-party Android widget page transitions. It preserves your existing layout data, native AppWidget IDs, and the v0.6.2 visibility/undo safeguards.
+
+## Performance improvements
+
+- **Home pages are reconciled instead of rebuilt:** Only changed pages are repopulated; neighboring pages stay mounted as you swipe.
+- **Faster app library:** Reopening the drawer reuses its existing page elements if the app list, folders, view mode, and grid settings are unchanged; custom-order sorting uses indexed lookup.
+- **Folder view reuse:** Opening the same unchanged folder reuses its icons and pages rather than recreating them.
+- **App dragging:** Removes an unnecessary full render after a successful drag and avoids repeatedly clearing the same highlighted target. Layout changes still persist and remain undoable.
+- **Native Android widgets:** A dedicated Android host animation now matches the 240 ms WebView page-slide easing and travel distance on adjacent-page transitions. Existing atomic visibility synchronization is retained for modal overlays, edit mode, long page jumps and recovery.
+- **Native host placement:** Avoids redundant Android view layout passes when native widget size and position have not changed.
+
+## Verification and limits
+
+CI runs launcher/browser regression tests, integrity checks, and builds the Android SDK 36 debug APK. **The third-party widget animation still requires a real-phone test**, especially for different providers, rapid repeated swipes, transparent widgets, and switching pages while providers update. No improvement in frame rate is claimed without on-device profiling.
+
+**Signing warning:** Unless your existing persistent `MEK_DEBUG_KEYSTORE_B64` GitHub secret is configured, the workflow produces a temporary-key test APK that cannot upgrade a previously installed differently signed build. Export your layout before uninstalling another build. Keep Samsung One UI Home available as a fallback.
+
+---
+
 # MEK-AI Mobile v0.6.2 — Third-party widget visibility repair
 
 **Experimental Android beta.** Addresses the Galaxy S10+ regression reported after v0.6.1: third-party widgets could be added and resized in Home edit mode but left behind an invisible space after tapping Done.
