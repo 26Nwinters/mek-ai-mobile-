@@ -88,6 +88,10 @@ function atStart(x,y,target){
     },HOLD_MS);
   }
 }
+function positionDragGhost(x,y){
+  // Translate a compositor layer instead of changing left/top on touchmove.
+  $('dragGhost').style.transform='translate3d('+(x-36)+'px,'+(y-42)+'px,0) scale(1.08)';
+}
 function beginDrag(p,x,y){
   const source=p.source;if(!source||M.drag)return;
   source.container?.classList.remove('held-item');
@@ -103,7 +107,7 @@ function beginDrag(p,x,y){
   ghost.append(M.iconDom(source.item,{noLabel:false}));
   ghost.classList.remove('hidden');
   M.drag={source,item:{...source.item},startX:p.x,startY:p.y,x,y,moved:true,target:null};
-  ghost.style.left=x+'px';ghost.style.top=y+'px';
+  positionDragGhost(x,y);
   M.gestureSuppressUntil=Date.now()+1100;
   document.querySelectorAll('[data-uid]').forEach(node=>{
     if(node.dataset.uid===source.uid)node.classList.add('drag-origin');
@@ -151,7 +155,7 @@ function move(x,y,event){
   M.drag.x=x;M.drag.y=y;
   M.drag.moved=true;
   if(event&&event.cancelable)event.preventDefault();
-  const ghost=$('dragGhost');ghost.style.left=x+'px';ghost.style.top=y+'px';
+  const ghost=$('dragGhost');positionDragGhost(x,y);
   // Dragging upward out of the app archive exposes the actual Home grid.
   if(M.drag.source.loc==='drawer'&&M.view==='drawer'&&y<135){
     M.setView('home');M.enterEdit();
