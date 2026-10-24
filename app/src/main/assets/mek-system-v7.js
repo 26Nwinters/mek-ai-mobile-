@@ -18,7 +18,7 @@ function battery(){try{const v=JSON.parse(invoke('battery')||'{}');return Number
 function status(){const p=battery();return '<span>✦ MEK-AI / '+VERSION+'</span><span>'+time()+'　'+(p===null?'▣':p+'%')+'</span>';}
 function icon(name){return {'wifi':'⌁','bluetooth':'ᛒ','flashlight':'✦','airplane':'✈','display':'◐','volume':'♫','battery':'▣','settings':'⚙','home':'⌂','lock':'▤','dnd':'☾','apps':'▦','assistant':'◈','notifications':'▤','privacy':'◇','storage':'▣','about':'ⓘ','wallpaper':'◈','gesture':'↔','sound':'♫','network':'⌁','device':'▣','security':'◇'}[name]||'◈';}
 function panelTitle(kicker,title){return '<div class="sys-heading"><button type="button" data-sys-back aria-label="Back">‹</button><div><small>'+kicker+'</small><h2>'+title+'</h2></div><button type="button" data-sys-home aria-label="Return to Home">⌂</button></div>';}
-function navigate(view,push=true){if(push&&S.view!=='closed'&&S.view!==view)S.previous.push(S.view);S.view=view;S.query='';draw();refreshNative();}
+function navigate(view,push=true){if(push&&S.view!=='closed'&&S.view!==view)S.previous.push(S.view);S.view=view;S.query='';refreshNative();draw();}
 function open(view){if(window.Mek?.edit)window.Mek.exitEdit();if(window.Mek?.activeFolder)window.Mek.closeFolder();if(window.Mek?.sheet)window.Mek.closeSheet();S.previous=[];navigate(view,false);}
 function close(){S.view='closed';S.previous=[];draw();window.Mek?.scheduleWidgetSync?.();}
 function back(){if(S.view==='closed'){return false;}if(S.expanded&&S.view==='shade'){S.expanded=false;draw();return true;}if(S.previous.length){navigate(S.previous.pop(),false);return true;}close();return true;}
