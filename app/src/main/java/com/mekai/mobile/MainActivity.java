@@ -82,6 +82,8 @@ public class MainActivity extends Activity {
         nativeWidgetsUiAllowed=allowed;
         if(!allowed){
             for(AppWidgetHostView view:widgetViews.values()){
+                view.animate().cancel();
+                view.setTranslationX(0f);
                 view.setVisibility(View.GONE);
                 view.setClickable(false);
             }
