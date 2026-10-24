@@ -866,15 +866,20 @@ test('v0.6.3 animates adjacent native widget pages with ordered revisions',async
   const {dom,M,calls}=await phone();await settle();
   M.nativeWidgetChosen(971,'First provider',160,110);
   M.exitEdit();await settle();
-  M.mutate(model=>{M.Core.addPage(model,model.current);});
-  const destination=M.model.pages[1];
+  // Providers may not fit on the original first page. Use the actual page
+  // selected by the launcher's free-space algorithm, not a fixed page index.
+  const source=M.model.pages.find(p=>p.items.some(i=>i.nativeId===971));
+  assert.ok(source);
+  M.mutate(model=>{M.Core.addPage(model,source.id);});
+  const sourceIndex=M.model.pages.findIndex(p=>p.id===source.id);
+  const destination=M.model.pages[sourceIndex+1];
   const placed=M.mutate(model=>M.Core.addHome(model,{
     id:'second-native',type:'android-widget',nativeId:972,label:'Second provider',
     x:0,y:0,w:2,h:2,frameStyle:'transparent'
   },destination.id));
   assert.ok(placed);
   // Core.addHome switches current to the receiving page; reset to source.
-  M.model.current=M.model.pages[0].id;
+  M.model.current=source.id;
   M.renderHome();
   M.goPage(destination.id);
   assert.equal(calls.widgetTransitions.length,1);
