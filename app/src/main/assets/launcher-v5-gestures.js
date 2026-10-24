@@ -4,6 +4,7 @@
 const M=window.Mek,C=M.Core,$=M.$;
 const HOLD_MS=490,MOVE_TOLERANCE=12,SWIPE_DISTANCE=65;
 let press=null,holdTimer=null,edgeTimer=null,edgeDirection=0,mouseDown=false;
+let highlightedTarget=null;
 const touchPoint=e=>e.changedTouches&&e.changedTouches.length?e.changedTouches[0]:
   e.touches&&e.touches.length?e.touches[0]:e;
 function isIn(node,selector){return !!(node&&node.closest&&node.closest(selector));}
@@ -188,13 +189,18 @@ function maybeSwitchPage(x){
   },670);
 }
 function highlightTarget(x,y){
-  document.querySelectorAll('.drop-candidate').forEach(n=>n.classList.remove('drop-candidate'));
   const el=document.elementFromPoint?.(x,y);
-  const target=el&&el.closest('[data-loc]');
-  if(target&&['home','dock','drawer','folder'].includes(target.dataset.loc)){
-    target.classList.add('drop-candidate');
-    M.drag.target=target;
-  }else M.drag.target=null;
+  const candidate=el&&el.closest('[data-loc]');
+  const target=candidate&&['home','dock','drawer','folder'].includes(candidate.dataset.loc)
+    ?candidate:null;
+  // Drag moves can fire faster than frames. Don't invalidate every prior
+  // drop target on each touch event if the finger is still over the same cell.
+  if(target!==highlightedTarget){
+    highlightedTarget?.classList.remove('drop-candidate');
+    target?.classList.add('drop-candidate');
+    highlightedTarget=target;
+  }
+  M.drag.target=target;
 }
 function homePoint(x,y){
   if(M.view!=='home')return null;
@@ -304,8 +310,12 @@ function finalizeDrag(x,y){
   document.querySelectorAll('.drop-candidate,.drag-origin,.held-item').forEach(n=>{
     n.classList.remove('drop-candidate','drag-origin','held-item');
   });
+  highlightedTarget=null;
   M.gestureSuppressUntil=Date.now()+580;
-  M.render();
+  // mutate() already redrew changed surfaces; another full render here
+  // recreated every page after every single drag. Restore widget visibility
+  // without forcing an extra layout rebuild.
+  M.scheduleWidgetSync();
   if(!completed)M.toast('APP WAS NOT MOVED');
 }
 M.endDrag=function(cancel=false){
@@ -317,7 +327,8 @@ M.endDrag=function(cancel=false){
       this.drag=null;
       $('dragGhost').classList.add('hidden');$('dragGhost').textContent='';
       document.querySelectorAll('.drop-candidate,.drag-origin').forEach(n=>n.classList.remove('drop-candidate','drag-origin'));
-      this.render();
+      highlightedTarget=null;
+      this.scheduleWidgetSync();
     }
   }
 };
@@ -333,7 +344,7 @@ function finish(x,y){
     }else{
       const done=M.mutate(model=>C.resizeSmart(model,r.id,r.previewW,r.previewH));
       if(!done)M.toast('NOT ENOUGH ROOM TO RESIZE');
-      M.renderHome();
+      // mutate already updated the resized cell and its native widget rect.
     }
     M.gestureSuppressUntil=Date.now()+550;
     return;
