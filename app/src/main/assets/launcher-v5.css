@@ -234,9 +234,18 @@ body.editing .home-viewport{overflow:hidden}
 .folder-viewport{flex:1;min-height:0;overflow:hidden;touch-action:pan-y}
 .folder-track{height:100%;width:100%;display:flex;transition:transform .2s}
 .folder-page{height:100%;min-width:100%;flex:0 0 100%;display:grid;grid-template-columns:repeat(var(--folder-cols,4),minmax(0,1fr));grid-template-rows:repeat(var(--folder-rows,4),minmax(0,1fr));gap:5px}
-.folder-cell{min-width:0;min-height:0;position:relative}
-.folder-cell .icon-tile{justify-content:flex-start}
-.folder-cell .app-symbol{max-height:52px}
+.folder-cell{min-width:0;min-height:0;position:relative;overflow:hidden}
+.folder-cell .icon-tile{
+  justify-content:flex-start;
+  width:100%;min-width:0;max-width:100%;box-sizing:border-box;overflow:hidden
+}
+.folder-cell .app-symbol{flex:0 0 auto;max-height:52px;max-width:100%}
+.folder-cell .icon-label{
+  width:100%;max-width:100%;min-width:0;box-sizing:border-box;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
+  white-space:normal;overflow:hidden;overflow-wrap:anywhere;
+  line-height:1.2;max-height:2.4em;text-overflow:ellipsis
+}
 .folder-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:0 0 35px}
 .folder-actions button{color:var(--amber);font:10px 'Consolas',monospace;border:1px solid var(--edge);border-radius:8px;padding:10px}
 .folder-actions span{color:#9dad99;font:8px 'Consolas',monospace}

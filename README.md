@@ -1,3 +1,24 @@
+# MEK-AI Mobile v0.6.4 — Native widget rendering and folder labels
+
+**Experimental Android beta.** This repair responds to native third-party widgets whose touch targets work but whose visual content sometimes remains blank on v0.6.3. All existing Home layout data and native widget IDs are retained.
+
+## Fixes
+
+- **Safe provider drawing:** Retires v0.6.3's direct native `AppWidgetHostView` translation animation, which could expose real Android provider surfaces to temporary off-screen coordinates or incomplete drawing states. The WebView pages still animate normally.
+- **Stable restoration:** When an adjacent page contains native widgets, hide the host surfaces without destroying their measured `RemoteViews` layout, then restore the actual on-screen coordinates after the 240 ms CSS transition. Fast repeated swipes cancel stale pending restoration, and folders/sheets/edit mode remain above native touch surfaces.
+- **Per-provider repaint:** Restored widgets reset their host alpha and request a new layout/draw without allocating new widget IDs or changing provider bindings.
+- **Folder names:** Long app labels now stay within their own folder grid cell, wrap to at most two lines, and truncate rather than overlap the next app.
+
+## Validation
+
+CI runs Node/jsdom regression tests, Android API/release checks and an Android SDK 36 APK build. The tests include multiple native widgets on one page, rapid swipes and sheets opened mid-transition.
+
+**Real-phone check required:** A browser simulator cannot validate actual third-party Android provider pixels or provider-specific rendering bugs. This version prioritizes visible/reliable widgets over animating the native widget surfaces themselves. Third-party widgets may appear after the page-slide completes, not travel with the icons.
+
+**APK signing:** Without an owner-provisioned `MEK_DEBUG_KEYSTORE_B64` secret, GitHub builds a temporary-key APK that **cannot update** an already installed differently signed build. Export your layout and keep Samsung One UI Home as your fallback before changing installed versions.
+
+---
+
 # MEK-AI Mobile v0.6.3 — Launcher responsiveness update
 
 **Experimental Android beta.** This release targets sluggish folder opening, app-library access, icon movement, and third-party Android widget page transitions. It preserves your existing layout data, native AppWidget IDs, and the v0.6.2 visibility/undo safeguards.

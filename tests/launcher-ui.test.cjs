@@ -862,37 +862,91 @@ test('v0.6.3 reuses unchanged Home, dock, folder and app library elements',async
   dom.window.close();
 });
 
-test('v0.6.3 animates adjacent native widget pages with ordered revisions',async()=>{
+
+test('v0.6.4 restores both native widgets in one snapshot after settling a page',async()=>{
   const {dom,M,calls}=await phone();await settle();
-  M.nativeWidgetChosen(971,'First provider',160,110);
-  M.exitEdit();await settle();
-  // Providers may not fit on the original first page. Use the actual page
-  // selected by the launcher's free-space algorithm, not a fixed page index.
-  const source=M.model.pages.find(p=>p.items.some(i=>i.nativeId===971));
-  assert.ok(source);
-  M.mutate(model=>{M.Core.addPage(model,source.id);});
-  const sourceIndex=M.model.pages.findIndex(p=>p.id===source.id);
-  const destination=M.model.pages[sourceIndex+1];
-  const placed=M.mutate(model=>M.Core.addHome(model,{
-    id:'second-native',type:'android-widget',nativeId:972,label:'Second provider',
-    x:0,y:0,w:2,h:2,frameStyle:'transparent'
-  },destination.id));
-  assert.ok(placed);
-  // Core.addHome switches current to the receiving page; reset to source.
-  M.model.current=source.id;
+  const start=M.model.current;
+  M.mutate(model=>{M.Core.addPage(model,start);});
+  const index=M.model.pages.findIndex(page=>page.id===start);
+  const target=M.model.pages[index+1];
+  assert.ok(target);
+  M.mutate(model=>{
+    const first=M.Core.addHome(model,{
+      id:'native-a',type:'android-widget',nativeId:971,label:'Rumi A',
+      x:0,y:0,w:2,h:2,frameStyle:'transparent'
+    },target.id,{x:0,y:0});
+    const second=M.Core.addHome(model,{
+      id:'native-b',type:'android-widget',nativeId:972,label:'Rumi B',
+      x:2,y:0,w:2,h:2,frameStyle:'transparent'
+    },target.id,{x:2,y:0});
+    assert.ok(first&&second);
+  });
+  M.model.current=start;
   M.renderHome();
-  M.goPage(destination.id);
-  assert.equal(calls.widgetTransitions.length,1);
-  const animation=calls.widgetTransitions[0];
-  assert.equal(animation.durationMs,240);
-  assert.ok(animation.dx<0);
-  assert.deepEqual(new Set(animation.widgets.map(w=>w.id)),new Set([971,972]));
-  assert.equal(animation.widgets.find(w=>w.id===971).incoming,false);
-  assert.equal(animation.widgets.find(w=>w.id===972).incoming,true);
-  await new Promise(resolve=>setTimeout(resolve,320));
-  const committed=calls.widgets.filter(p=>p.allow&&p.widgets.some(w=>w.id===972)).at(-1);
-  assert.ok(committed,'destination native widget must get a final atomic rect update');
-  assert.ok(committed.revision>animation.revision);
+  M.goPage(target.id);
+  assert.equal(calls.widgetTransitions.length,0,
+    'RemoteViews must not be animated off-screen as in v0.6.3');
+  assert.equal(calls.widgetLayers.at(-1),false,
+    'native host must stop intercepting taps while Home slides');
+  await new Promise(resolve=>setTimeout(resolve,160));
+  assert.equal(calls.widgetLayers.at(-1),false,
+    'do not show widgets at intermediate WebView coordinates');
+  await new Promise(resolve=>setTimeout(resolve,245));
+  const shown=calls.widgets.filter(p=>p.allow).at(-1);
+  assert.ok(shown);
+  assert.deepEqual(new Set(shown.widgets.map(w=>w.id)),new Set([971,972]),
+    'both providers restore together, not only the first widget');
+  assert.ok(shown.widgets.every(w=>w.visible&&w.w>0&&w.h>0));
+  assert.equal(calls.widgetLayers.at(-1),true);
+  dom.window.close();
+});
+
+test('v0.6.4 rapid swipes cannot restore widgets from an abandoned page',async()=>{
+  const {dom,M,calls}=await phone();await settle();
+  const start=M.model.current;
+  M.mutate(model=>{M.Core.addPage(model,start);});
+  const idx=M.model.pages.findIndex(page=>page.id===start);
+  const target=M.model.pages[idx+1];
+  const widget=M.mutate(model=>M.Core.addHome(model,{
+    id:'rapid-native',type:'android-widget',nativeId:981,label:'Rumi',
+    x:0,y:0,w:2,h:2,frameStyle:'transparent'
+  },target.id,{x:0,y:0}));
+  assert.ok(widget);
+  M.model.current=start;M.renderHome();
+  M.goPage(target.id);
+  await new Promise(resolve=>setTimeout(resolve,50));
+  M.goPage(start);
+  await new Promise(resolve=>setTimeout(resolve,420));
+  const last=calls.widgets.at(-1);
+  assert.equal(last.allow,true);
+  assert.ok(!last.widgets.some(w=>w.id===981),
+    'a stale timer must never resurrect a widget on another page');
+  assert.equal(calls.widgetTransitions.length,0);
+  dom.window.close();
+});
+
+test('v0.6.4 native page settling respects sheets and restores on close',async()=>{
+  const {dom,M,calls}=await phone();await settle();
+  const start=M.model.current;
+  M.mutate(model=>{M.Core.addPage(model,start);});
+  const idx=M.model.pages.findIndex(page=>page.id===start);
+  const target=M.model.pages[idx+1];
+  const widget=M.mutate(model=>M.Core.addHome(model,{
+    id:'modal-native',type:'android-widget',nativeId:982,label:'Weather',
+    x:0,y:0,w:2,h:2,frameStyle:'transparent'
+  },target.id,{x:0,y:0}));
+  assert.ok(widget);
+  M.model.current=start;M.renderHome();
+  M.goPage(target.id);
+  M.openSheet('widgets');
+  await new Promise(resolve=>setTimeout(resolve,385));
+  assert.equal(calls.widgets.at(-1).allow,false,
+    'a folder or sheet must prevent deferred restoration');
+  M.closeSheet();
+  await new Promise(resolve=>setTimeout(resolve,95));
+  const shown=calls.widgets.at(-1);
+  assert.equal(shown.allow,true);
+  assert.ok(shown.widgets.some(w=>w.id===982));
   dom.window.close();
 });
 
