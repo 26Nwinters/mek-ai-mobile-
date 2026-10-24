@@ -2,7 +2,7 @@ name: Build MEK-AI Mobile APK
 
 on:
   push:
-    branches: [main, fix-v0.6.4-native-widget-visibility]
+    branches: [main, fix-v0.6.4-native-widget-visibility, feature/v0.7.0-system-experience]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -70,7 +70,7 @@ jobs:
         if: env.MEK_STABLE_SIGNING == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: MEK-AI-Mobile-v0.6.4-STABLE-KEY-debug
+          name: MEK-AI-Mobile-v0.7.0-STABLE-KEY-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
