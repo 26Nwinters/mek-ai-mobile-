@@ -26,7 +26,7 @@ async function phone(seed=null){
     }
     return nativeRect.call(this);
   };
-  const calls={launch:[],system:[],widgets:[],widgetInventories:[],widgetLayers:[],widgetTimeline:[],exports:[],imports:0,pickWidget:0,info:[],iconBatches:[]};
+  const calls={launch:[],system:[],widgets:[],widgetTransitions:[],widgetInventories:[],widgetLayers:[],widgetTimeline:[],exports:[],imports:0,pickWidget:0,info:[],iconBatches:[]};
   const apps=Array.from({length:150},(_,i)=>({name:'Application '+String(i).padStart(3,'0'),pkg:'com.example.app'+i}));
   w.MEK={
     battery:()=>JSON.stringify({percent:37,charging:false}),
@@ -55,6 +55,12 @@ async function phone(seed=null){
       calls.widgets.push(value);
       calls.widgetTimeline.push({kind:'layout',revision:value.revision,allow:value.allow,
         ids:(value.widgets||[]).map(w=>w.id)});
+    },
+    animateWidgetPageTransition:data=>{
+      const value=JSON.parse(data);
+      calls.widgetTransitions.push(value);
+      calls.widgetTimeline.push({kind:'transition',revision:value.revision,
+        allow:true,ids:value.widgets.map(w=>w.id)});
     },
     syncWidgetInventory:data=>calls.widgetInventories.push(JSON.parse(data)),
     setWidgetLayerActive:(allowed,revision)=>{
@@ -816,5 +822,93 @@ test('Android resume explicitly reapplies visible widget positions',async()=>{
   await new Promise(resolve=>setTimeout(resolve,125));
   const next=calls.widgets.filter(x=>x.allow&&x.widgets.some(y=>y.id===814)).at(-1);
   assert.ok(next.revision>first.revision);
+  dom.window.close();
+});
+
+test('v0.6.3 reuses unchanged Home, dock, folder and app library elements',async()=>{
+  const {dom,M,d}=await phone();await settle();
+  const originalHome=d.querySelector('.home-page');
+  const originalHomeCell=d.querySelector('.home-page .grid-cell');
+  const originalDock=d.querySelector('.dock-slot');
+  M.renderHome();M.renderDock();
+  assert.equal(d.querySelector('.home-page'),originalHome);
+  assert.equal(d.querySelector('.home-page .grid-cell'),originalHomeCell);
+  assert.equal(d.querySelector('.dock-slot'),originalDock);
+
+  M.setView('drawer');await settle();
+  const drawer=d.querySelector('.app-page');
+  const drawerIcon=d.querySelector('.app-page-cell');
+  M.setView('home');M.setView('drawer');
+  assert.equal(d.querySelector('.app-page'),drawer);
+  assert.equal(d.querySelector('.app-page-cell'),drawerIcon);
+  M.drawerQuery='Application 00';M.renderDrawer();
+  assert.notEqual(d.querySelector('.app-page'),drawer,
+    'a changed search must invalidate the cached app archive');
+  M.drawerQuery='';M.renderDrawer();
+  M.setView('home');
+
+  const folder=M.Core.addHome(M.model,{type:'folder',id:'perf-folder',
+    name:'Archive',apps:[{pkg:'com.example.app2',label:'Application 002'}]});
+  assert.ok(folder);
+  M.renderHome();M.openFolder('perf-folder');
+  const folderPage=d.querySelector('.folder-page');
+  M.closeFolder();M.openFolder('perf-folder');
+  assert.equal(d.querySelector('.folder-page'),folderPage,
+    'reopening the same folder should reuse its icon DOM');
+  M.mutate(model=>{M.findFolder('perf-folder').apps.push({
+    pkg:'com.example.app3',label:'Application 003'});});
+  assert.notEqual(d.querySelector('.folder-page'),folderPage,
+    'a changed folder must rerender its contents');
+  dom.window.close();
+});
+
+test('v0.6.3 animates adjacent native widget pages with ordered revisions',async()=>{
+  const {dom,M,calls}=await phone();await settle();
+  M.nativeWidgetChosen(971,'First provider',160,110);
+  M.exitEdit();await settle();
+  // Providers may not fit on the original first page. Use the actual page
+  // selected by the launcher's free-space algorithm, not a fixed page index.
+  const source=M.model.pages.find(p=>p.items.some(i=>i.nativeId===971));
+  assert.ok(source);
+  M.mutate(model=>{M.Core.addPage(model,source.id);});
+  const sourceIndex=M.model.pages.findIndex(p=>p.id===source.id);
+  const destination=M.model.pages[sourceIndex+1];
+  const placed=M.mutate(model=>M.Core.addHome(model,{
+    id:'second-native',type:'android-widget',nativeId:972,label:'Second provider',
+    x:0,y:0,w:2,h:2,frameStyle:'transparent'
+  },destination.id));
+  assert.ok(placed);
+  // Core.addHome switches current to the receiving page; reset to source.
+  M.model.current=source.id;
+  M.renderHome();
+  M.goPage(destination.id);
+  assert.equal(calls.widgetTransitions.length,1);
+  const animation=calls.widgetTransitions[0];
+  assert.equal(animation.durationMs,240);
+  assert.ok(animation.dx<0);
+  assert.deepEqual(new Set(animation.widgets.map(w=>w.id)),new Set([971,972]));
+  assert.equal(animation.widgets.find(w=>w.id===971).incoming,false);
+  assert.equal(animation.widgets.find(w=>w.id===972).incoming,true);
+  await new Promise(resolve=>setTimeout(resolve,320));
+  const committed=calls.widgets.filter(p=>p.allow&&p.widgets.some(w=>w.id===972)).at(-1);
+  assert.ok(committed,'destination native widget must get a final atomic rect update');
+  assert.ok(committed.revision>animation.revision);
+  dom.window.close();
+});
+
+test('v0.6.3 preserves native widget overlays when a folder opens on a new page',async()=>{
+  const {dom,M,calls}=await phone();await settle();
+  M.nativeWidgetChosen(973,'Weather',160,110);
+  M.exitEdit();await settle();
+  M.mutate(model=>{M.Core.addPage(model,model.current);});
+  M.goPage(M.model.pages[1].id);
+  M.openSheet('widgets');
+  assert.equal(calls.widgetLayers.at(-1),false,
+    'a modal must immediately suppress native widgets even when page sync was scheduled');
+  await new Promise(resolve=>setTimeout(resolve,340));
+  assert.equal(calls.widgets.at(-1).allow,false,
+    'queued transition sync must not reveal native views behind a modal');
+  M.closeSheet();await settle();
+  assert.equal(calls.widgets.at(-1).allow,true);
   dom.window.close();
 });

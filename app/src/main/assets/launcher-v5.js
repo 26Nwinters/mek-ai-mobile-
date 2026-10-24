@@ -61,13 +61,19 @@ const Mek={
     if(before!==after){
       this.history.push(before);
       if(this.history.length>20)this.history.shift();
-      this.persist();
+      this.persist(after);
       this.render();
     }
     return result;
   },
-  persist(){
-    const ok=store(KEY,this.model);
+  persist(serialized=null){
+    // mutate() already serialized the validated model for change detection.
+    // Reuse it instead of producing a third full JSON snapshot on each move.
+    let ok=false;
+    try{
+      localStorage.setItem(KEY,serialized===null?JSON.stringify(this.model):serialized);
+      ok=true;
+    }catch(e){ok=false;}
     if(!ok)this.toast('PHONE STORAGE IS UNAVAILABLE');
     // The native widget host needs the complete inventory of allocated IDs.
     // Current-page visibility is not an inventory and must not be used for
@@ -159,17 +165,74 @@ const Mek={
     this.persist();this.renderHome();this.renderDock();
     this.scheduleWidgetSync();
   },
+  animateNativePageSwitch(fromIndex,toIndex){
+    const native=this.native();
+    if(typeof native?.animateWidgetPageTransition!=='function' ||
+       this.view!=='home'||this.edit||!this.model.settings.motion||
+       !this.canShowNativeWidgets()||Math.abs(toIndex-fromIndex)!==1)return false;
+    const track=$('homeTrack');
+    const pageWidth=track?.getBoundingClientRect().width||window.innerWidth;
+    if(!Number.isFinite(pageWidth)||pageWidth<100)return false;
+    const widgets=[];
+    for(const index of [fromIndex,toIndex]){
+      const page=this.model.pages[index];
+      const surface=Array.from(track.children).find(n=>n.dataset.page===page.id);
+      if(!surface||surface.dataset.mounted!=='true')return false;
+      for(const item of page.items){
+        if(item.type!=='android-widget')continue;
+        const node=Array.from(surface.querySelectorAll('.grid-cell'))
+          .find(n=>n.dataset.uid===item.id);
+        if(!node)return false;
+        const rect=node.getBoundingClientRect();
+        if(!Number.isFinite(rect.left)||!Number.isFinite(rect.top)||
+          rect.width<40||rect.height<40)return false;
+        widgets.push({id:item.nativeId,x:rect.left,y:rect.top,w:rect.width,
+          h:rect.height,incoming:index===toIndex});
+      }
+    }
+    if(!widgets.length)return false;
+    // CSS and native widgets share the same 240ms easing and slide distance.
+    // The Android host animates its real AppWidgetHostViews rather than
+    // chasing each WebView frame with delayed layout measurements.
+    try{
+      const revision=this.nextNativeWidgetRevision();
+      native.animateWidgetPageTransition(JSON.stringify({
+        revision,viewportWidth:window.innerWidth,dx:(fromIndex-toIndex)*pageWidth,
+        durationMs:240,widgets
+      }));
+      return true;
+    }catch(e){return false;}
+  },
   goPage(id){
     const index=this.model.pages.findIndex(p=>p.id===id);
     if(index<0)return;
+    const oldIndex=this.model.pages.findIndex(p=>p.id===this.model.current);
+    if(oldIndex===index){
+      this.renderPageDots();
+      this.scheduleWidgetSync();
+      return;
+    }
     this.model.current=id;
-    // Populate the target page before the slide and drop distant DOM tiles.
+    // Populate both adjacent pages before measuring native widget geometry.
     this.hydrateHomePages?.();
+    const animated=this.animateNativePageSwitch(oldIndex,index);
     const track=$('homeTrack');
     if(track)track.style.transform='translate3d(-'+(index*100)+'%,0,0)';
     this.renderPageDots();
     this.persist();
-    this.scheduleWidgetSync();
+    if(animated){
+      clearTimeout(this.nativeWidgetTimer);
+      clearTimeout(this.nativeWidgetFollowup);
+      clearTimeout(this.nativeWidgetRecoveryTimer);
+      clearTimeout(this.nativeWidgetStatusTimer);
+      // Commit final native positions after the matching CSS transition.
+      this.nativeWidgetTimer=setTimeout(()=>this.syncNativeWidgets(true),260);
+      this.nativeWidgetFollowup=setTimeout(()=>this.syncNativeWidgets(true),410);
+      this.nativeWidgetRecoveryTimer=setTimeout(()=>this.syncNativeWidgets(true),1400);
+    }else{
+      // Long jumps and reduced-motion mode use the established atomic sync.
+      this.scheduleWidgetSync();
+    }
   },
   stepPage(delta){
     const i=this.model.pages.findIndex(p=>p.id===this.model.current);
@@ -244,10 +307,10 @@ const Mek={
     const apps=this.apps.filter(a=>!assigned.has(a.pkg));
     const items=[...this.systemCatalog,...apps,...this.model.drawerFolders];
     if(this.model.settings.appSort==='custom'){
-      const order=this.model.drawerOrder;
+      const positions=new Map(this.model.drawerOrder.map((key,index)=>[key,index]));
       items.sort((a,b)=>{
         const ka=a.type==='app'?a.pkg:a.id,kb=b.type==='app'?b.pkg:b.id;
-        const ia=order.indexOf(ka),ib=order.indexOf(kb);
+        const ia=positions.get(ka)??-1,ib=positions.get(kb)??-1;
         if(ia>=0&&ib>=0)return ia-ib;
         if(ia>=0)return -1;if(ib>=0)return 1;
         return a.label?.localeCompare(b.label||b.name||'')||0;

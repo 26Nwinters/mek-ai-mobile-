@@ -192,13 +192,22 @@ M.populateHomePage=function(surface,page,index){
 M.hydrateHomePages=function(){
   const pages=this.model.pages;
   const current=Math.max(0,pages.findIndex(p=>p.id===this.model.current));
+  const dimensions=this.model.settings.homeCols+'x'+this.model.settings.homeRows;
   for(const [index,page] of pages.entries()){
     const surface=$('homeTrack').children[index];if(!surface)continue;
     const shouldMount=Math.abs(current-index)<=1;
-    if(shouldMount&&surface.dataset.mounted!=='true')
-      this.populateHomePage(surface,page,index);
-    else if(!shouldMount&&surface.dataset.mounted==='true'){
+    if(shouldMount){
+      // Keep unchanged pages (and their clocks, icons and widget placeholders)
+      // mounted. A single moved app should invalidate only its source/target.
+      const signature=JSON.stringify([dimensions,page.items,
+        this.model.notes,this.model.tasks,this.selectedWidget,this.edit]);
+      if(surface.dataset.mounted!=='true'||surface._renderSignature!==signature){
+        this.populateHomePage(surface,page,index);
+        surface._renderSignature=signature;
+      }
+    }else if(surface.dataset.mounted==='true'){
       surface.replaceChildren();surface.dataset.mounted='false';
+      surface._renderSignature=null;
     }
   }
   this.refreshClock();this.refreshBattery();this.scheduleIconDrain();
@@ -206,36 +215,56 @@ M.hydrateHomePages=function(){
 M.renderHome=function(){
   const track=$('homeTrack');if(!track)return;
   const pages=this.model.pages;
-  track.replaceChildren();
-  for(const [index,page] of pages.entries()){
-    const surface=document.createElement('div');surface.className='home-page';
-    surface.dataset.page=page.id;
+  const structure=JSON.stringify(pages.map(p=>p.id));
+  const rebuild=track._pageStructure!==structure||track.children.length!==pages.length;
+  if(rebuild){
+    track.replaceChildren();
+    for(const [index,page] of pages.entries()){
+      const surface=document.createElement('div');surface.className='home-page';
+      surface.dataset.page=page.id;
+      surface.setAttribute('aria-label','Home page '+(index+1));
+      track.append(surface);
+    }
+    track._pageStructure=structure;
+  }
+  for(const surface of track.children){
     surface.style.setProperty('--home-cols',this.model.settings.homeCols);
     surface.style.setProperty('--home-rows',this.model.settings.homeRows);
-    surface.setAttribute('aria-label','Home page '+(index+1));
-    track.append(surface);
   }
   const index=Math.max(0,pages.findIndex(p=>p.id===this.model.current));
-  track.style.transition='none';
+  if(rebuild)track.style.transition='none';
   track.style.transform='translate3d(-'+(index*100)+'%,0,0)';
   this.hydrateHomePages();
-  requestAnimationFrame(()=>{track.style.transition='';});
+  if(rebuild)requestAnimationFrame(()=>{track.style.transition='';});
   this.renderPageDots();this.scheduleWidgetSync();this.scheduleIconDrain();
 };
 M.renderPageDots=function(){
-  const host=$('homePageDots');if(!host)return;host.textContent='';
+  const host=$('homePageDots');if(!host)return;
+  const structure=JSON.stringify(this.model.pages.map(p=>p.id));
+  if(host._pageStructure!==structure||host.children.length!==this.model.pages.length){
+    host.textContent='';
+    this.model.pages.forEach((page,index)=>{
+      const button=document.createElement('button');button.type='button';
+      button.setAttribute('aria-label','Home page '+(index+1));
+      button.onclick=()=>this.goPage(page.id);
+      host.append(button);
+    });
+    host._pageStructure=structure;
+  }
+  // Swiping only changes the active dot; keep the page indicator buttons.
   this.model.pages.forEach((page,index)=>{
-    const button=document.createElement('button');button.type='button';
-    button.className=page.id===this.model.current?'active':'';
-    button.setAttribute('aria-label','Home page '+(index+1));
+    const button=host.children[index];
+    button.classList.toggle('active',page.id===this.model.current);
     button.setAttribute('aria-current',page.id===this.model.current?'page':'false');
-    button.onclick=()=>this.goPage(page.id);
-    host.append(button);
   });
   $('homeEyebrow').textContent='THE HIDEAWAY / HOME '+(this.model.pages.findIndex(p=>p.id===this.model.current)+1);
 };
 M.renderDock=function(){
   const host=$('dock');if(!host)return;
+  const signature=JSON.stringify([this.model.settings.dockSlots,this.model.dock]);
+  this.applyPrefs();
+  if(host._renderSignature===signature)return;
+  host._renderSignature=signature;
   host.style.setProperty('--dock-slots',String(this.model.settings.dockSlots));
   host.textContent='';
   for(let i=0;i<this.model.settings.dockSlots;i++){
@@ -262,48 +291,57 @@ M.renderDock=function(){
     }
     host.append(slot);
   }
-  this.applyPrefs();
   this.scheduleIconDrain();
 };
 M.renderDrawer=function(){
-  const host=$('drawerTrack');if(!host)return;
+  const host=$('drawerTrack');if(!host||this.view!=='drawer')return;
   const isVertical=this.model.settings.appLayout==='vertical';
   const viewport=$('drawerPages');
   viewport.classList.toggle('vertical-drawer',isVertical);
   host.classList.toggle('vertical-track',isVertical);
-  if(this.view!=='drawer')return;
   const items=this.allDrawerItems();
   this.drawerSnapshot=items;
   const {appCols:cols,appRows:rows}=this.model.settings;
   const size=cols*rows,pageCount=Math.max(1,Math.ceil(items.length/size));
   this.drawerPage=Math.max(0,Math.min(pageCount-1,this.drawerPage));
-  $('appCount').textContent=items.length+' APPS / PAGE '+(this.drawerPage+1)+' OF '+pageCount;
-  host.textContent='';
-  for(let i=0;i<pageCount;i++){
-    const page=document.createElement('div');page.className='app-page';
-    page.dataset.page=String(i);
-    page.style.setProperty('--app-cols',cols);page.style.setProperty('--app-rows',rows);
-    page.setAttribute('aria-label','App page '+(i+1));
-    host.append(page);
+  // Reopen a populated archive without tearing down the entire page tree.
+  // Selection mode, installed apps, settings and folder changes invalidate it.
+  const signature=JSON.stringify([cols,rows,isVertical,this.selectMode,items]);
+  const rebuild=host._renderSignature!==signature||host.children.length!==pageCount;
+  if(rebuild){
+    host.textContent='';
+    for(let i=0;i<pageCount;i++){
+      const page=document.createElement('div');page.className='app-page';
+      page.dataset.page=String(i);
+      page.style.setProperty('--app-cols',cols);page.style.setProperty('--app-rows',rows);
+      page.setAttribute('aria-label','App page '+(i+1));
+      host.append(page);
+    }
+    host._renderSignature=signature;
   }
   this.populateDrawerPage(this.drawerPage);
   this.populateDrawerPage(this.drawerPage+1);
   this.populateDrawerPage(this.drawerPage-1);
-  const dots=$('drawerDots');dots.textContent='';
-  for(let i=0;i<pageCount;i++){
-    const dot=document.createElement('button');dot.type='button';
-    dot.className=i===this.drawerPage?'active':'';
-    dot.setAttribute('aria-label','App page '+(i+1));
-    dot.onclick=()=>this.goDrawerPage(i);
-    dots.append(dot);
+  const dots=$('drawerDots');
+  if(rebuild||dots.children.length!==pageCount){
+    dots.textContent='';
+    for(let i=0;i<pageCount;i++){
+      const dot=document.createElement('button');dot.type='button';
+      dot.setAttribute('aria-label','App page '+(i+1));
+      dot.onclick=()=>this.goDrawerPage(i);
+      dots.append(dot);
+    }
   }
-  const scroll=$('drawerPages');
-  try{
-    if(isVertical)scroll.scrollTo({top:this.drawerPage*(scroll.clientHeight||1),behavior:'instant'});
-    else scroll.scrollTo({left:this.drawerPage*(scroll.clientWidth||1),behavior:'instant'});
-  }catch(e){
-    if(isVertical)scroll.scrollTop=this.drawerPage*(scroll.clientHeight||1);
-    else scroll.scrollLeft=this.drawerPage*(scroll.clientWidth||1);
+  this.updateDrawerDots();
+  if(rebuild){
+    const scroll=$('drawerPages');
+    try{
+      if(isVertical)scroll.scrollTo({top:this.drawerPage*(scroll.clientHeight||1),behavior:'instant'});
+      else scroll.scrollTo({left:this.drawerPage*(scroll.clientWidth||1),behavior:'instant'});
+    }catch(e){
+      if(isVertical)scroll.scrollTop=this.drawerPage*(scroll.clientHeight||1);
+      else scroll.scrollLeft=this.drawerPage*(scroll.clientWidth||1);
+    }
   }
   this.renderLibrarySelection?.();
   this.scheduleIconDrain();
@@ -389,7 +427,14 @@ M.renderFolder=function(){
   const capacity=cols*rows;
   const count=Math.max(1,Math.ceil(folder.apps.length/capacity));
   this.folderPage=Math.min(this.folderPage,count-1);
-  const track=$('folderTrack');track.textContent='';
+  const track=$('folderTrack');
+  const signature=JSON.stringify([folder.id,folder.apps,cols,rows]);
+  if(track._renderSignature===signature){
+    this.goFolderPage(this.folderPage);
+    return;
+  }
+  track._renderSignature=signature;
+  track.textContent='';
   for(let pageIndex=0;pageIndex<count;pageIndex++){
     const page=document.createElement('div');page.className='folder-page';
     page.style.setProperty('--folder-cols',cols);page.style.setProperty('--folder-rows',rows);

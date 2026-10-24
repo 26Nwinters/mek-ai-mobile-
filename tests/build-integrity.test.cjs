@@ -70,7 +70,7 @@ test('v0.6.2 always restores Android widgets after edit, with versioned atomic l
   assert.match(java,/setWidgetLayerActive\(boolean allowed,int revision\)/);
   assert.match(java,/view\.setVisibility\(View\.GONE\)/);
   assert.match(java,/hostView\.setVisibility\(View\.VISIBLE\)/);
-  assert.match(java,/hostView\.setBackgroundColor\(android\.graphics\.Color\.TRANSPARENT\)/);
+  assert.match(java,/(?:hostView|view)\.setBackgroundColor\(android\.graphics\.Color\.TRANSPARENT\)/);
   assert.match(java,/reportWidgetStatus\(id,"attached"\)/);
   assert.match(java,/reportWidgetStatus\(id,"missing"\)/);
   const js=read('app/src/main/assets/launcher-v5.js');

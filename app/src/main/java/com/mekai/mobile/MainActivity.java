@@ -82,6 +82,8 @@ public class MainActivity extends Activity {
         nativeWidgetsUiAllowed=allowed;
         if(!allowed){
             for(AppWidgetHostView view:widgetViews.values()){
+                view.animate().cancel();
+                view.setTranslationX(0f);
                 view.setVisibility(View.GONE);
                 view.setClickable(false);
             }
@@ -569,6 +571,28 @@ public class MainActivity extends Activity {
         }
     }
 
+    private AppWidgetHostView getOrCreateWidgetView(int id){
+        AppWidgetHostView view=widgetViews.get(id);
+        if(view!=null)return view;
+        AppWidgetProviderInfo info=AppWidgetManager.getInstance(this).getAppWidgetInfo(id);
+        if(info==null){
+            reportWidgetStatus(id,"missing");
+            Log.w(TAG,"Widget provider missing for host id "+id);
+            return null;
+        }
+        try{
+            view=widgetHost.createView(this,id,info);
+            view.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+            widgetViews.put(id,view);
+            stage.addView(view);
+            return view;
+        }catch(Exception e){
+            Log.w(TAG,"Could not create native widget view "+id,e);
+            reportWidgetStatus(id,"error");
+            return null;
+        }
+    }
+
     /* Native widget surfaces sit above the local WebView at CSS-pixel-derived
        coordinates. The UI hides them during editing, sheet dialogs and paging.
        This uses the real Android AppWidgetHost / RemoteViews system. */
@@ -601,34 +625,23 @@ public class MainActivity extends Activity {
                            w=item.optDouble("w",-1),h=item.optDouble("h",-1);
                     if(!Double.isFinite(x)||!Double.isFinite(y)||!Double.isFinite(w)||!Double.isFinite(h)
                         ||w<40||h<40||w>3000||h>3000)continue;
-                    AppWidgetHostView hostView=widgetViews.get(id);
-                    if(hostView==null){
-                        AppWidgetProviderInfo info=AppWidgetManager.getInstance(this).getAppWidgetInfo(id);
-                        if(info==null){
-                            reportWidgetStatus(id,"missing");
-                            Log.w(TAG,"Widget provider missing for host id "+id);
-                            continue;
-                        }
-                        try{
-                            hostView=widgetHost.createView(this,id,info);
-                            // The launcher does not impose a card background.
-                            // RemoteViews may still draw the widget provider's
-                            // own intentional background.
-                            hostView.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-                            widgetViews.put(id,hostView);
-                            stage.addView(hostView);
-                        }catch(Exception e){
-                            Log.w(TAG,"Could not create native widget view "+id,e);
-                            reportWidgetStatus(id,"error");continue;
-                        }
-                    }
+                    AppWidgetHostView hostView=getOrCreateWidgetView(id);
+                    if(hostView==null)continue;
                     visible.add(id);
                     FrameLayout.LayoutParams params=new FrameLayout.LayoutParams(
                         Math.max(1,(int)Math.round(w*scale)),
                         Math.max(1,(int)Math.round(h*scale)));
                     params.leftMargin=(int)Math.round(x*scale);
                     params.topMargin=(int)Math.round(y*scale);
-                    hostView.setLayoutParams(params);
+                    // Never retain a swipe translation after the final page
+                    // snapshot, and avoid unnecessary Android layout passes.
+                    hostView.animate().cancel();
+                    hostView.setTranslationX(0f);
+                    FrameLayout.LayoutParams old=hostView.getLayoutParams() instanceof FrameLayout.LayoutParams
+                        ?(FrameLayout.LayoutParams)hostView.getLayoutParams():null;
+                    if(old==null||old.width!=params.width||old.height!=params.height||
+                       old.leftMargin!=params.leftMargin||old.topMargin!=params.topMargin)
+                        hostView.setLayoutParams(params);
                     hostView.setVisibility(View.VISIBLE);
                     hostView.setClickable(true);
                     reportWidgetStatus(id,"attached");
@@ -653,6 +666,79 @@ public class MainActivity extends Activity {
                 }
             }
         }catch(Exception e){Log.w(TAG,"Native widget layout ignored",e);}
+    }
+
+    /* Coordinate AppWidgetHostViews with the WebView's 240ms home-page
+       transform. The incoming and outgoing views share one native animation;
+       layoutNativeWidgets() later commits the final authoritative snapshot. */
+    private void animateNativeWidgetPageTransition(String payload){
+        if(stage==null||web==null||widgetHost==null||!nativeWidgetsUiAllowed)return;
+        try{
+            if(payload==null||payload.length()>90000)return;
+            JSONObject input=new JSONObject(payload);
+            int revision=input.optInt("revision",-1);
+            if(revision<0||revision<=latestWidgetLayerRevision)return;
+            double viewport=input.optDouble("viewportWidth",0);
+            double dx=input.optDouble("dx",Double.NaN);
+            if(!Double.isFinite(viewport)||viewport<100||!Double.isFinite(dx))return;
+            double scale=web.getWidth()/viewport;
+            if(!Double.isFinite(scale)||scale<=0)return;
+            int duration=Math.max(0,Math.min(350,input.optInt("durationMs",240)));
+            JSONArray items=input.optJSONArray("widgets");
+            if(items==null||items.length()>40)return;
+            setNativeWidgetLayerActive(true,revision);
+            HashSet<Integer> animated=new HashSet<>();
+            final int deltaPx=(int)Math.round(dx*scale);
+            for(int i=0;i<items.length();i++){
+                JSONObject item=items.optJSONObject(i);
+                if(item==null)continue;
+                int id=item.optInt("id",-1);
+                double x=item.optDouble("x",Double.NaN);
+                double y=item.optDouble("y",Double.NaN);
+                double w=item.optDouble("w",Double.NaN);
+                double h=item.optDouble("h",Double.NaN);
+                if(id<=0||!Double.isFinite(x)||!Double.isFinite(y)||
+                   !Double.isFinite(w)||!Double.isFinite(h)||
+                   w<40||h<40||w>3000||h>3000)continue;
+                AppWidgetHostView view=getOrCreateWidgetView(id);
+                if(view==null)continue;
+                view.animate().cancel();
+                view.setTranslationX(0f);
+                FrameLayout.LayoutParams params=new FrameLayout.LayoutParams(
+                    Math.max(1,(int)Math.round(w*scale)),
+                    Math.max(1,(int)Math.round(h*scale)));
+                params.leftMargin=(int)Math.round(x*scale);
+                params.topMargin=(int)Math.round(y*scale);
+                view.setLayoutParams(params);
+                view.setVisibility(View.VISIBLE);
+                view.setClickable(true);
+                view.bringToFront();
+                animated.add(id);
+                final AppWidgetHostView moving=view;
+                final boolean incoming=item.optBoolean("incoming",false);
+                moving.animate().translationX(deltaPx).setDuration(duration)
+                    .setInterpolator(new android.view.animation.PathInterpolator(.22f,.6f,.2f,1f))
+                    .withEndAction(()->{
+                        if(latestWidgetLayerRevision!=revision)return;
+                        FrameLayout.LayoutParams end=(FrameLayout.LayoutParams)moving.getLayoutParams();
+                        end.leftMargin+=deltaPx;
+                        moving.setLayoutParams(end);
+                        moving.setTranslationX(0f);
+                        if(!incoming){
+                            moving.setVisibility(View.GONE);
+                            moving.setClickable(false);
+                        }else reportWidgetStatus(id,"attached");
+                    }).start();
+            }
+            for(java.util.Map.Entry<Integer,AppWidgetHostView> entry:widgetViews.entrySet()){
+                if(!animated.contains(entry.getKey())){
+                    entry.getValue().animate().cancel();
+                    entry.getValue().setTranslationX(0f);
+                    entry.getValue().setVisibility(View.GONE);
+                    entry.getValue().setClickable(false);
+                }
+            }
+        }catch(Exception e){Log.w(TAG,"Native page transition ignored",e);}
     }
 
     public class PhoneBridge {
@@ -747,6 +833,11 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void syncWidgetRects(String json) {
             if(json==null||json.length()>90000)return;
             runOnUiThread(()->layoutNativeWidgets(json));
+        }
+
+        @JavascriptInterface public void animateWidgetPageTransition(String json) {
+            if(json==null||json.length()>90000)return;
+            runOnUiThread(()->animateNativeWidgetPageTransition(json));
         }
 
         @JavascriptInterface public void requestNativeHome() {
