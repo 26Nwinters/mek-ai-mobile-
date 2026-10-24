@@ -87,6 +87,7 @@ const SETTINGS=[
  {id:'navigation',title:'Navigation',sub:'MEK-AI Back, Home and Recents demo',i:'gesture'},
  {id:'security',title:'Security & privacy',sub:'Authentication and private notifications',i:'security'},
  {id:'device',title:'Device',sub:'Battery, storage, apps and Android Settings',i:'device'},
+ {id:'assistant',title:'MEK-AI companion',sub:'Robot, voice assistant and home controls',i:'assistant'},
  {id:'about',title:'About MEK-AI',sub:'Prototype capabilities and system limits',i:'about'}
 ];
 function prefSwitch(key,label,hint){return '<label class="sys-pref"><span><b>'+label+'</b><small>'+hint+'</small></span><input type="checkbox" data-sys-pref="'+key+'" '+(prefs[key]?'checked':'')+' aria-label="'+label+'"></label>';}
@@ -129,6 +130,7 @@ function categoryView(){
  action('Installed applications','Android apps settings','apps')+
  action('Default Home app','Choose your device launcher','home-role')+
  action('MEK-AI Home settings','Existing launcher grids, themes, widgets','home-settings');
+ if(id==='assistant')content='<div class="sys-assistant"><img src="mek.webp" alt="MEK-AI companion"><span>◈ COMPANION / CONNECTED LAUNCHER</span><h3>HELLO, OPERATOR.</h3><p>My voice assistant opens in the existing MEK-AI experience. Your phone will request microphone access when needed.</p><button data-sys-tile="assistant-open">TALK TO MEK-AI ↗</button><button data-sys-tile="house-open">HOUSE CONTROLS ↗</button></div>';
  if(id==='about')content='<div class="sys-about"><span>◈ MK / 07</span><h3>MEK-AI MOBILE '+VERSION+'</h3><p>SYSTEM EXPERIENCE PREVIEW</p><p>Custom Home, lock-screen prototype, notification inbox, Quick Settings, in-app navigation, and Settings. This Android APK does not replace protected SystemUI, system gestures, or keyguard.</p><p>DESIGNED FOR ANDROID 12+ · APPETIZE EVALUATION</p></div>';
  return '<section class="sys-page">'+panelTitle('MEK-AI SETTINGS / '+id.toUpperCase(),escape(info.title))+'<div class="sys-category-detail">'+content+'</div></section>';
 }
@@ -159,6 +161,8 @@ function nativeTile(kind){
  if(kind==='notifications-view'){navigate('notifications');return;}
  if(kind==='lock-view'){navigate('lock');return;}
  if(kind==='home-settings'){close();window.Mek?.setView('settings');return;}
+ if(kind==='assistant-open'){close();window.Mek?.setView('assistant');return;}
+ if(kind==='house-open'){close();window.Mek?.setView('house');return;}
  if(kind==='notification-access'){invoke('openNotificationAccess');toast('ANDROID NOTIFICATION ACCESS SETTINGS OPENED');return;}
  if(kind==='torch'){
    const result=invoke('toggleTorch');if(result===null||result==='unavailable')toast('FLASHLIGHT UNAVAILABLE IN THIS DEVICE OR EMULATOR');
@@ -190,6 +194,7 @@ function consume(event){
 }
 function install(){
  const root=$('systemExperience');if(!root)return;
+ document.addEventListener('click',e=>{const btn=e.target.closest('[data-sys-open]');if(btn&&!root.contains(btn))open(btn.dataset.sysOpen);});
  root.addEventListener('click',consume);
  root.addEventListener('change',e=>{
    if(e.target.dataset.sysPref){const key=e.target.dataset.sysPref;if(Object.prototype.hasOwnProperty.call(DEFAULTS,key)){prefs[key]=!!e.target.checked;persist();draw();}}
