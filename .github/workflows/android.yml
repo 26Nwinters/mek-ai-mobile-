@@ -96,10 +96,18 @@ jobs:
           APK_SIGNER="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
           test -n "$APK_SIGNER" && test -x "$APK_SIGNER" && test -f "$APK"
           "$APK_SIGNER" verify --verbose --print-certs "$APK" > "$RUNNER_TEMP/mekai-signature-report.txt"
-          ACTUAL="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/mekai-signature-report.txt" | head -n 1 | tr '[:lower:]' '[:upper:]')"
+          # apksigner's output may be indented or include variable spacing.
+          # Compare ONLY the signing CERTIFICATE digest (not the public-key digest).
+          CERT_LINE="$(grep -iEm1 'certificate SHA-256 digest:' "$RUNNER_TEMP/mekai-signature-report.txt" || true)"
+          ACTUAL="$(printf '%s' "$CERT_LINE" | sed -E 's/^.*digest:[[:space:]]*//' | tr -d '[:space:]:' | tr '[:lower:]' '[:upper:]')"
           EXPECTED="E44DBA69D602BD2AC79411B2D0828CF5E7A5B16B5525B72D33681B520CC71914"
+          if ! [[ "$ACTUAL" =~ ^[0-9A-F]{64}$ ]]; then
+            echo "::error::Could not parse apksigner's certificate SHA-256 output. Refusing to publish the APK."
+            exit 1
+          fi
           if [ "$ACTUAL" != "$EXPECTED" ]; then
-            echo "::error::APK certificate differs from MEK-AI's pinned permanent signing certificate."
+            # SHA-256 certificate fingerprints are public information (not passwords/keys).
+            echo "::error::APK signing certificate fingerprint mismatch; release blocked. Actual public fingerprint: $ACTUAL"
             exit 1
           fi
           echo "::notice::Signed APK verified; stable update signature confirmed."
