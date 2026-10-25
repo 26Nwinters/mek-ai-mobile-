@@ -5,10 +5,11 @@ const path=require('node:path');
 const {JSDOM}=require('jsdom');
 const assets=path.resolve(__dirname,'../app/src/main/assets');
 const read=name=>fs.readFileSync(path.join(assets,name),'utf8');
-async function phone(seed=null){
+async function phone(seed=null,coldIconCache=null){
   const dom=new JSDOM(read('index.html'),{url:'https://mek.invalid/',runScripts:'outside-only',pretendToBeVisual:true});
   const w=dom.window;
   if(seed)w.localStorage.setItem('mek_launcher_v5',JSON.stringify(seed));
+  if(coldIconCache)w.localStorage.setItem('mek_home_icons_v1',JSON.stringify(coldIconCache));
   w.scrollTo=()=>{};
   w.HTMLElement.prototype.scrollTo=function(arg){this.scrollLeft=typeof arg==='object'?arg.left||0:0;};
   w.HTMLCanvasElement.prototype.getContext=()=>({beginPath(){},arc(){},fill(){},clearRect(){}});
@@ -1046,5 +1047,55 @@ test('v0.7.3 fast Home gestures do not re-inventory unchanged Android widgets',a
   await settle();
   assert.equal(M.model.current,M.model.pages[0].id);
   assert.equal(calls.widgetInventories.length,count,'navigation must not queue redundant native ID scans');
+  dom.window.close();
+});
+
+test('v0.7.4 renders pinned Home icons immediately from bounded cold-start cache',async()=>{
+  const Core=require('../app/src/main/assets/launcher-core.js');
+  const seed=Core.defaultState();
+  const added=Core.addHome(seed,{id:'cached-app',type:'app',pkg:'com.example.app12',
+    label:'Application 012',x:0,y:0,w:1,h:1},seed.current);
+  assert.ok(added);
+  const record={v:1,icons:[['com.example.app12','data:image/webp;base64,AAAA',Date.now()]]};
+  const {dom,d,calls}=await phone(seed,record);
+  const tile=d.querySelector('.grid-cell[data-uid="cached-app"] .app-symbol');
+  assert.ok(tile&&tile.querySelector('img'),'pinned icon must paint from disk cache before Android discovery');
+  assert.ok(!calls.iconBatches.flat().includes('com.example.app12'),
+    'visible Home icon already cached should not queue redundant native decoding');
+  dom.window.close();
+});
+
+test('v0.7.4 persists only Home/dock icon data with bounded size and invalidates it on app changes',async()=>{
+  const Core=require('../app/src/main/assets/launcher-core.js');
+  const seed=Core.defaultState();
+  assert.ok(Core.addHome(seed,{id:'pinned-app',type:'app',pkg:'com.example.app12',
+    label:'Pinned',x:0,y:0,w:1,h:1},seed.current));
+  const {dom,w,M}=await phone(seed);
+  await new Promise(resolve=>setTimeout(resolve,600));
+  const saved=JSON.parse(w.localStorage.getItem('mek_home_icons_v1')||'null');
+  assert.equal(saved?.v,1);
+  assert.ok(saved.icons.some(([pkg])=>pkg==='com.example.app12'),'Home icons should survive cold starts');
+  assert.ok(!saved.icons.some(([pkg])=>pkg==='com.example.app149'),
+    'unmounted app-drawer icons must not enter Home cache');
+  assert.ok(saved.icons.length<=48,'cache remains bounded');
+  M.appsChanged();
+  assert.equal(w.localStorage.getItem('mek_home_icons_v1'),null,
+    'package changes must discard disk icons until new native data is retrieved');
+  dom.window.close();
+});
+
+test('v0.7.4 ignores expired or malformed Home icon cache entries',async()=>{
+  const Core=require('../app/src/main/assets/launcher-core.js');
+  const seed=Core.defaultState();
+  assert.ok(Core.addHome(seed,{id:'old-app',type:'app',pkg:'com.example.app14',
+    label:'Old',x:0,y:0,w:1,h:1},seed.current));
+  const stale={v:1,icons:[
+    ['com.example.app14','data:image/webp;base64,AAAA',Date.now()-40*60*60*1000],
+    ['com.example.app20','broken-data',Date.now()]]};
+  const {dom,d,calls}=await phone(seed,stale);
+  assert.equal(d.querySelector('.grid-cell[data-uid="old-app"] .app-symbol img')?.src,
+    'data:image/webp;base64,AAAA','real Android response should still populate expired icons');
+  assert.ok(calls.iconBatches.flat().includes('com.example.app14'),
+    'expired icons require native decoding rather than displaying stale thumbnails');
   dom.window.close();
 });

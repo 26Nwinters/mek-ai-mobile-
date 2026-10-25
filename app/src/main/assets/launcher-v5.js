@@ -3,6 +3,10 @@
 (function(){
 const Core=window.MekCore;
 const KEY='mek_launcher_v5';
+const PINNED_ICON_KEY='mek_home_icons_v1';
+const PINNED_ICON_MAX_AGE=36*60*60*1000;
+// Only Home/dock icons are persisted. The full app library stays in the
+// native process LRU so a 150-app phone never bloats WebView localStorage.
 const $=id=>document.getElementById(id);
 function read(key,def){
   try {const raw=localStorage.getItem(key);return raw==null?def:JSON.parse(raw);}
@@ -11,6 +15,21 @@ function read(key,def){
 function store(key,value){
   try{localStorage.setItem(key,JSON.stringify(value));return true;}catch(e){return false;}
 }
+function loadPinnedIconCache(){
+  const record=read(PINNED_ICON_KEY,null);
+  const icons=new Map(),times=new Map(),now=Date.now();
+  if(record?.v!==1||!Array.isArray(record.icons))return {icons,times};
+  for(const entry of record.icons.slice(0,48)){
+    if(!Array.isArray(entry)||entry.length!==3)continue;
+    const [pkg,data,stamp]=entry;
+    if(!Core.packageOk(pkg)||typeof data!=='string'||data.length>50000||
+       !/^data:image\/(?:webp|png);base64,[A-Za-z0-9+/=]+$/.test(data)||
+       !Number.isFinite(stamp)||stamp>now||now-stamp>PINNED_ICON_MAX_AGE)continue;
+    icons.set(pkg,data);times.set(pkg,stamp);
+  }
+  return {icons,times};
+}
+const cachedHomeIcons=loadPinnedIconCache();
 const saved=read(KEY,null);
 let initial=saved&&saved.version===5 ? Core.normalize(saved) :
   Core.migrateLegacy(key=>localStorage.getItem(key));
@@ -30,7 +49,8 @@ const Mek={
   view:'home',edit:false,drawerPage:0,folderPage:0,
   activeFolder:null,drawerQuery:'',picking:null,sheet:null,
   apps:[],appsLoaded:false,appsLoading:false,lastAppsRequest:0,
-  iconCache:new Map(),iconQueue:[],iconPending:new Map(),iconBusy:null,
+  iconCache:cachedHomeIcons.icons,homeIconTimestamps:cachedHomeIcons.times,
+  homeIconSaveTimer:null,iconQueue:[],iconPending:new Map(),iconBusy:null,
   iconInflight:new Set(),iconCooldown:new Map(),iconDrainTimer:null,iconBatchTimer:null,
   iconBatchCount:0,
   iconObserver:null,history:[],lastToastTimer:null,
@@ -548,6 +568,10 @@ const Mek={
   },
   appsChanged(){
     this.appsLoaded=false;this.iconCache.clear();
+    this.homeIconTimestamps.clear();
+    clearTimeout(this.homeIconSaveTimer);
+    this.homeIconSaveTimer=null;
+    try{localStorage.removeItem(PINNED_ICON_KEY);}catch(e){}
     this.iconPending.clear();this.iconQueue.length=0;
     this.iconCooldown.clear();
     this.refreshApps(true);
@@ -577,6 +601,32 @@ const Mek={
   },
   // App icon tiles are created before they're inserted into the DOM.
   // Queue them, then request only attached icons on the next frame.
+  pinnedIconPackages(){
+    const packages=new Set(),collect=item=>{
+      if(item?.type==='app'&&Core.packageOk(item.pkg))packages.add(item.pkg);
+      else if(item?.type==='folder')for(const app of item.apps||[])
+        if(Core.packageOk(app.pkg))packages.add(app.pkg);
+    };
+    for(const page of this.model.pages||[])for(const item of page.items||[])collect(item);
+    for(const item of this.model.dock||[])collect(item);
+    return packages;
+  },
+  schedulePinnedIconSave(){
+    clearTimeout(this.homeIconSaveTimer);
+    this.homeIconSaveTimer=setTimeout(()=>{
+      this.homeIconSaveTimer=null;
+      const pins=this.pinnedIconPackages(),icons=[];
+      for(const pkg of pins){
+        const data=this.iconCache.get(pkg),stamp=this.homeIconTimestamps.get(pkg);
+        if(typeof data==='string'&&data.length<50000&&Number.isFinite(stamp)){
+          icons.push([pkg,data,stamp]);
+          if(icons.length>=48)break;
+        }
+      }
+      try{localStorage.setItem(PINNED_ICON_KEY,JSON.stringify({v:1,icons}));}
+      catch(e){/* Low-storage devices simply fall back to native decoding. */}
+    },350);
+  },
   loadIcon(node,pkg){
     if(!node||!Core.packageOk(pkg))return;
     node.dataset.pkg=pkg;
@@ -659,6 +709,10 @@ const Mek={
       }
       this.iconCache.set(pkg,data);
       this.iconCooldown.delete(pkg);
+      if(this.pinnedIconPackages().has(pkg)){
+        this.homeIconTimestamps.set(pkg,Date.now());
+        this.schedulePinnedIconSave();
+      }
       const nodes=this.iconPending.get(pkg)||new Set();
       for(const node of nodes)this.putIcon(node,data);
       this.iconPending.delete(pkg);

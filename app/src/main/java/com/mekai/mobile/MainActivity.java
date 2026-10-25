@@ -127,6 +127,11 @@ public class MainActivity extends Activity {
 
     private final java.util.concurrent.ExecutorService appExecutor =
         java.util.concurrent.Executors.newSingleThreadExecutor();
+    // App catalog/provider discovery may take several seconds on older devices.
+    // Keep icon decoding on an independent worker so Home icons never sit
+    // behind a full PackageManager query.
+    private final java.util.concurrent.ExecutorService iconExecutor =
+        java.util.concurrent.Executors.newSingleThreadExecutor();
     private final android.util.LruCache<String,String> iconCache =
         new android.util.LruCache<>(260);
     private static final String TAG = "MEKMobile";
@@ -220,11 +225,11 @@ public class MainActivity extends Activity {
         super.onPause();
     }
     @Override protected void onStop(){
+        // The default Home app is reopened many times each day. Tearing down
+        // AppWidgetHost here makes every return expensive, and some providers
+        // redraw late or blank. Keep its ONE listener until onDestroy().
+        // Pause only WebView timers while backgrounded.
         if(web!=null)web.pauseTimers();
-        if(widgetHost!=null&&widgetHostListening){
-            try{widgetHost.stopListening();}catch(Exception e){Log.w(TAG,"Widget host stop failed",e);}
-            widgetHostListening=false;
-        }
         super.onStop();
     }
     @Override protected void onDestroy() {
@@ -241,6 +246,7 @@ public class MainActivity extends Activity {
         }
         widgetViews.clear();lastWidgetSizes.clear();reportedWidgetStatuses.clear();
         appExecutor.shutdownNow();
+        iconExecutor.shutdownNow();
         if (web != null) {
             web.removeJavascriptInterface("MEK");
             web.destroy();
@@ -955,7 +961,7 @@ public class MainActivity extends Activity {
                 }
             }catch(Exception e){return;}
             if(packages.isEmpty())return;
-            appExecutor.execute(()->{
+            iconExecutor.execute(()->{
                 JSONArray results=new JSONArray();
                 for(String pkg:packages){
                     try {
@@ -978,7 +984,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface public void requestAppIcon(String pkg) {
             if (pkg == null || !pkg.matches("[a-zA-Z0-9_.]{3,180}")) return;
-            appExecutor.execute(() -> {
+            iconExecutor.execute(() -> {
                 String encoded = getAppIcon(pkg);
                 runOnUiThread(() -> {
                     if (web != null) {

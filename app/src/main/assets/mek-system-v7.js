@@ -1,7 +1,7 @@
 /* MEK-AI Mobile 0.7.0 — interactive System Experience, NOT an Android SystemUI replacement. */
 (function(){
 'use strict';
-const VERSION='0.7.3', KEY='mek_system_v7';
+const VERSION='0.7.4', KEY='mek_system_v7';
 const $=id=>document.getElementById(id);
 const DEFAULTS={accent:'amber',compact:false,clock24:false,reduceMotion:false,privateNotifications:true,nav:'gestures',character:true,lockNotifications:true,brightness:65,brightnessOverride:false};
 let prefs={...DEFAULTS};

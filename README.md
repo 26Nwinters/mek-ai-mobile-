@@ -1,3 +1,20 @@
+# MEK-AI Mobile v0.7.4 — Home Icon Performance Repair
+
+This is an in-place update to the existing permanently signed MEK-AI Home, preserving `com.mekai.mobile`, the `mek_launcher_v5` layout/storage origin, Android widget bindings, Home/dock organization, and the v0.7.2+ pinned release-signing certificate. Android `versionCode 21` upgrades v0.7.3 without uninstalling.
+
+## Why Home icon loading felt slower
+
+The app discovery, widget catalog and icon-decoding requests previously shared one Android single-thread executor. Loading the full installed-app list could block the first 12-item icon batch. In v0.7.3, backgrounding Home also tore down the Android widget host listener, making every return require another synchronous widget-host start.
+
+- **Independent icon worker:** The Android icon requests now run on a dedicated worker and do not wait behind the full PackageManager app-discovery query. App listing and provider catalog remain on the existing worker.
+- **Home/dock icon warm-start cache:** Successful icon responses for pinned Home apps, Home folders and dock apps are saved as a small bounded WebP/PNG cache in existing WebView localStorage (at most 48 entries, 36-hour expiry). Returning after launcher process recreation can display familiar icons without waiting for Android to decode the images again. Only Home/dock icons are persisted, not the entire installed-app archive. Android package-change broadcasts invalidate the disk cache.
+- **Warm widget listener:** Keep AppWidgetHost listening while the Home Activity is temporarily backgrounded, avoiding expensive stop/start cycles and potentially late provider redraws. WebView timers still pause while the launcher is backgrounded. Widget IDs and layout are untouched.
+- **Regression tests:** Icon disk cache fast path, invalidation, expiry, cache bounds, split Android work queues, and lifecycle/warm widget host behavior are validated in CI alongside the existing Home, third-party widget, and gesture tests.
+
+This repairs a probable source-code bottleneck. Real pixel-display timing, animation fluidity, and power consumption on a Galaxy phone still require an on-device check, and no automatic/sustained FPS or millisecond improvement is claimed by CI.
+
+---
+
 # MEK-AI Mobile v0.7.3 — Stability & Recovery
 
 **In-place permanent-key update** to the existing Galaxy launcher, using the same package `com.mekai.mobile`, the same pinned release signing certificate and Android `versionCode 20`. This release keeps the current artwork, WebView origin, Home layout, app drawer and personalization choices. It does not require uninstalling a previously installed **permanently signed v0.7.2** APK.

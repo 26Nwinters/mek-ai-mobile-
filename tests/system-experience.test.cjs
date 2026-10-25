@@ -35,14 +35,14 @@ function tap(w,selector){
  assert.ok(target,'Missing expected interactive control: '+selector);
  target.click();
 }
-test('v0.7.3 prototype is bundled and loaded after the regular launcher',()=>{
+test('v0.7.4 prototype is bundled and loaded after the regular launcher',()=>{
  const html=asset('index.html');
  assert.match(html,/id="systemExperience"/);
  assert.match(html,/mek-system-v7\.css/);
  assert.match(html,/mek-system-v7\.js/);
  assert.ok(html.indexOf('launcher-v5-gestures.js')<html.indexOf('mek-system-v7.js'));
  const gradle=fs.readFileSync(path.join(root,'app/build.gradle.kts'),'utf8');
- assert.ok(gradle.includes('versionName = "0.7.3"'));
+ assert.ok(gradle.includes('versionName = "0.7.4"'));
 });
 test('shade opens from Home and closing restores native Android widgets',()=>{
  const {w,actions,root}=prototype();
