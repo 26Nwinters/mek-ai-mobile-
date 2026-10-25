@@ -66,7 +66,7 @@ const Mek={
     }
     return result;
   },
-  persist(serialized=null){
+  persist(serialized=null,syncInventory=true){
     // mutate() already serialized the validated model for change detection.
     // Reuse it instead of producing a third full JSON snapshot on each move.
     let ok=false;
@@ -78,7 +78,7 @@ const Mek={
     // The native widget host needs the complete inventory of allocated IDs.
     // Current-page visibility is not an inventory and must not be used for
     // deletion, or widgets on another Home page would be removed.
-    if(ok)this.scheduleWidgetInventorySync();
+    if(ok&&syncInventory)this.scheduleWidgetInventorySync();
   },
   collectNativeWidgetIds(){
     const ids=new Set();
@@ -205,7 +205,9 @@ const Mek={
     const track=$('homeTrack');
     if(track)track.style.transform='translate3d(-'+(index*100)+'%,0,0)';
     this.renderPageDots();
-    this.persist();
+    // Changing desktop pages does not add or remove Android widgets.
+    // Avoid scheduling a full native widget ID inventory scan on every swipe.
+    this.persist(null,false);
     if(deferNative){
       this.nativePageTransitionTimer=setTimeout(()=>{
         this.nativePageTransitionTimer=null;
@@ -394,7 +396,9 @@ const Mek={
     clearTimeout(this.nativeWidgetRecoveryTimer);
     clearTimeout(this.nativeWidgetStatusTimer);
     this.nativeWidgetTimer=setTimeout(()=>this.syncNativeWidgets(true),40);
-    if(show){
+    const activePage=show?Core.pageById(this.model,this.model.current):null;
+    const hasNativeWidgets=!!activePage?.items.some(item=>item.type==='android-widget');
+    if(hasNativeWidgets){
       this.nativeWidgetStatusTimer=setTimeout(()=>{
         if(!this.canShowNativeWidgets())return;
         const active=Core.pageById(this.model,this.model.current);
