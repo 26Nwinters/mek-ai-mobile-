@@ -1,3 +1,24 @@
+# MEK-AI Mobile v0.7.3 — Stability & Recovery
+
+**In-place permanent-key update** to the existing Galaxy launcher, using the same package `com.mekai.mobile`, the same pinned release signing certificate and Android `versionCode 20`. This release keeps the current artwork, WebView origin, Home layout, app drawer and personalization choices. It does not require uninstalling a previously installed **permanently signed v0.7.2** APK.
+
+## Backup and Android widget recovery
+
+- **Safe restore:** A backup retains pages, dock, folders, tasks, notes, widget provider references, and native widget sizes and grid placements. Because Android widget IDs belong to the original app installation, every third-party widget in an imported backup becomes an explicit **Reconnect Widget** placeholder. It never accidentally assumes a stale ID is bound to the new installation.
+- **Reconnect in place:** Tap the placeholder and approve the Android widget binding/configuration. If that provider no longer exists, the Android system picker is offered. A successful connection gives the existing tile a **new** Android host ID while preserving its location and size. Canceling leaves the tile available for later retry, rather than deleting it.
+- **Blank bound widget repair:** Select the affected third-party widget, open Resize, and choose **Refresh Blank Android Widget**. The native view is recreated **without deleting or reallocating its host ID**. Removal of the provider can now be detected even if a host view was already cached. Provider-specific rendering remains subject to Android/One UI and requires real-device verification.
+- **Important:** A third-party app may require configuration again and may not accept its old dimensions. Android does not provide a general backup/restore guarantee for provider-owned widget content through this custom layout importer.
+
+## Background work and display
+
+- The activity pauses WebView timers and stops the AppWidgetHost listener when it goes offscreen; both resume when the launcher returns. Visible widget views get a fresh layout request on foreground return, and the custom notification inbox no longer loses its scroll position on Activity resume.
+- MEK-AI defaults to **following the phone's brightness**, including for users who previously saved a custom numeric slider value but never explicitly enabled an override. Moving the brightness slider opts into window-only brightness control; **Follow Phone Brightness** resets the override.
+- UI tests now exercise imported widget IDs, successful reconnect, canceled reconnect, view refresh, rapid swipes, brightness opt-in/reset, and notification scroll on resume. Android-source checks cover lifecycle, signed update identity, and view refresh safety.
+
+**Device QA still required:** GitHub Actions can compile the APK and simulate gestures in jsdom, but it cannot reproduce a Galaxy's provider RemoteViews pixels, real ambient battery usage, or every third-party widget configuration screen.
+
+---
+
 # MEK-AI Mobile v0.7.2 — Permanent APK Signing
 
 MEK-AI Home now builds its personal installable releases using one **pinned, permanent APK signing certificate** rather than generating a new Android debug key each time. The Android package remains `com.mekai.mobile` and the localStorage origin is unchanged. A successful upgrade keeps launcher pages, folders, permissions, settings and third-party widget bindings.
