@@ -66,8 +66,15 @@ function cleanItem(item,cols=4,rows=6,asDock=false){
   }
   if(item.type==='android-widget'){
     if(asDock)return null;
-    out.nativeId=clamp(item.nativeId,1,1000000,-1);
-    if(out.nativeId<1)return null;
+    // Imported backups cannot restore Android's installation-local widget IDs.
+    // Keep an explicit, inert placeholder until Android grants a NEW binding.
+    if(item.needsRebind===true){
+      out.nativeId=0;
+      out.needsRebind=true;
+    }else{
+      out.nativeId=clamp(item.nativeId,1,1000000,-1);
+      if(out.nativeId<1)return null;
+    }
     out.label=text(item.label||'Android Widget');
     out.frameStyle=['transparent','outlined','panel','minimal'].includes(item.frameStyle)?
       item.frameStyle:'transparent';
