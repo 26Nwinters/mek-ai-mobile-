@@ -188,8 +188,8 @@ test('periodic live refresh preserves notification nodes and scroll unless messa
 });
 test('navigation avoids native inventory scans and widget retries on empty Home pages',()=>{
  const js=asset('launcher-v5.js'),ui=asset('launcher-v5-ui.js');
- assert.match(js,/this\\.persist\\(null,false\\)/);
- assert.match(js,/if\\(hasNativeWidgets\\)/);
- assert.match(ui,/if\\(mountedChanged\\)\\{this\\.refreshClock\\(\\);this\\.refreshBattery\\(\\);\\}/);
+ assert.ok(js.includes('this.persist(null,false)'));
+ assert.ok(js.includes('if(hasNativeWidgets)'));
+ assert.ok(ui.includes('if(mountedChanged){this.refreshClock();this.refreshBattery();}'));
 });
 function domClose(w){w.close();}
