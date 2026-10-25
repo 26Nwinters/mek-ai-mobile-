@@ -119,3 +119,42 @@ test('folder labels stay contained inside each app grid slot',()=>{
   assert.match(css,/\.folder-cell \.icon-label\{[^}]*-webkit-line-clamp:2/);
   assert.match(css,/\.folder-cell \.icon-label\{[^}]*overflow-wrap:anywhere/);
 });
+
+test('v0.7.3 pauses browser work and widget updates outside the foreground',()=>{
+ assert.match(java,/@Override protected void onStart\(\)/);
+ assert.match(java,/@Override protected void onStop\(\)/);
+ assert.match(java,/web\.pauseTimers\(\)/);
+ assert.match(java,/web\.resumeTimers\(\)/);
+ assert.match(java,/web\.onPause\(\)/);
+ assert.match(java,/web\.onResume\(\)/);
+ assert.match(java,/widgetHost\.stopListening\(\)/);
+ assert.match(java,/widgetHost\.startListening\(\)/);
+});
+
+test('v0.7.3 provider recovery reuses original widget binding and never deletes the host ID',()=>{
+ const recovery=java.split('private void refreshWidgetSurface(int id){')[1]?.split('\n    }')[0];
+ assert.ok(recovery,'Native refresh helper is implemented');
+ assert.match(recovery,/widgetViews\.remove\(id\)/);
+ assert.match(recovery,/stage\.removeView\(stale\)/);
+ assert.doesNotMatch(recovery,/deleteAppWidgetId|releaseWidgetId/);
+ assert.match(java,/@JavascriptInterface public void refreshWidgetSurface\(int id\)/);
+ const js=read('app/src/main/assets/launcher-v5.js');
+ assert.match(js,/native\.refreshWidgetSurface\(id\)/);
+ assert.match(js,/pendingWidgetRebindId/);
+ const core=read('app/src/main/assets/launcher-core.js');
+ assert.match(core,/out\.needsRebind=true/);
+ assert.match(core,/out\.nativeId=0/);
+});
+
+test('v0.7.3 respects system brightness and retains the same stable signing identity',()=>{
+ const system=read('app/src/main/assets/mek-system-v7.js');
+ assert.match(system,/brightnessOverride:false/);
+ assert.match(system,/clearAppBrightness/);
+ assert.match(java,/BRIGHTNESS_OVERRIDE_NONE/);
+ assert.match(gradle,/versionCode\s*=\s*20/);
+ assert.match(gradle,/applicationId = "com\.mekai\.mobile"/);
+ const workflow=read('.github/workflows/android.yml');
+ assert.match(workflow,/E44DBA69D602BD2AC79411B2D0828CF5E7A5B16B5525B72D33681B520CC71914/);
+ assert.match(workflow,/assembleRelease/);
+ assert.match(workflow,/MEK_SIGNING_KEYSTORE_B64/);
+});
