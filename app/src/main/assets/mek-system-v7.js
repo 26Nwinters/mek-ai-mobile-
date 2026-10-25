@@ -1,9 +1,9 @@
 /* MEK-AI Mobile 0.7.0 — interactive System Experience, NOT an Android SystemUI replacement. */
 (function(){
 'use strict';
-const VERSION='0.7.2', KEY='mek_system_v7';
+const VERSION='0.7.3', KEY='mek_system_v7';
 const $=id=>document.getElementById(id);
-const DEFAULTS={accent:'amber',compact:false,clock24:false,reduceMotion:false,privateNotifications:true,nav:'gestures',character:true,lockNotifications:true,brightness:65};
+const DEFAULTS={accent:'amber',compact:false,clock24:false,reduceMotion:false,privateNotifications:true,nav:'gestures',character:true,lockNotifications:true,brightness:65,brightnessOverride:false};
 let prefs={...DEFAULTS};
 try{prefs={...DEFAULTS,...JSON.parse(localStorage.getItem(KEY)||'{}')};}catch(e){}
 const S={view:'closed',previous:[],expanded:false,notice:'',notifications:[],unlocked:false,query:'',lastRefresh:0};
@@ -143,7 +143,7 @@ function categoryView(){
  prefSwitch('clock24','24-hour clock','Display time in 24-hour format')+
  action('Home appearance','Open the existing Home customization','home-settings');
  if(id==='display')content=prefSwitch('reduceMotion','Reduce animations','Disable decorative transition effects')+
- '<div class="sys-section-label">APP DISPLAY BRIGHTNESS</div><div class="sys-brightness"><span>☼</span><input type="range" min="10" max="100" data-sys-brightness value="'+prefs.brightness+'"><span>'+prefs.brightness+'%</span></div>'+
+ '<div class="sys-section-label">APP DISPLAY BRIGHTNESS · '+(prefs.brightnessOverride?'CUSTOM':'FOLLOWING SYSTEM')+'</div><div class="sys-brightness"><span>☼</span><input type="range" min="10" max="100" data-sys-brightness value="'+prefs.brightness+'"><span data-sys-brightness-label>'+(prefs.brightnessOverride?prefs.brightness+'%':'SYSTEM')+'</span></div>'+'<div class="sys-choice-row"><button type="button" data-sys-auto-brightness>FOLLOW PHONE BRIGHTNESS</button></div>'+
  action('System display settings','Full device brightness and display controls','display');
  if(id==='sound')content=action('Volume controls','Open Android sound settings','volume')+action('Do Not Disturb','Open Android notification interruption settings','dnd');
  if(id==='connectivity')content=action('Wi-Fi','Open Android Wi-Fi controls','wifi')+action('Bluetooth','Open Bluetooth controls','bluetooth')+action('Airplane mode','Restricted: controlled by Android','airplane');
@@ -217,6 +217,7 @@ function consume(event){
  if(btn?.hasAttribute('data-sys-tile')){nativeTile(btn.dataset.sysTile);return;}
  if(btn?.hasAttribute('data-sys-nav')){prefs.nav=btn.dataset.sysNav;persist();draw();return;}
  if(btn?.hasAttribute('data-sys-accent')){prefs.accent=btn.dataset.sysAccent;persist();draw();return;}
+ if(btn?.hasAttribute('data-sys-auto-brightness')){prefs.brightnessOverride=false;persist();invoke('clearAppBrightness');draw();return;}
  if(btn?.hasAttribute('data-sys-open-notification')){
    invoke('openNotification',decodeURIComponent(btn.dataset.sysOpenNotification));refreshNative();draw();return;
  }
@@ -232,7 +233,14 @@ function install(){
    if(e.target.dataset.sysPref){const key=e.target.dataset.sysPref;if(Object.prototype.hasOwnProperty.call(DEFAULTS,key)){prefs[key]=!!e.target.checked;persist();draw();}}
  });
  root.addEventListener('input',e=>{
-   if(e.target.hasAttribute('data-sys-brightness')){prefs.brightness=Math.max(10,Math.min(100,+e.target.value||65));persist();invoke('setAppBrightness',prefs.brightness);return;}
+   if(e.target.hasAttribute('data-sys-brightness')){
+     prefs.brightness=Math.max(10,Math.min(100,+e.target.value||65));
+     prefs.brightnessOverride=true;persist();
+     invoke('setAppBrightness',prefs.brightness);
+     const label=root.querySelector('[data-sys-brightness-label]');
+     if(label)label.textContent=prefs.brightness+'%';
+     return;
+   }
    if(e.target.hasAttribute('data-sys-search')){S.query=e.target.value;const pos=e.target.selectionStart;draw();const input=root.querySelector('[data-sys-search]');if(input){input.focus();input.setSelectionRange(pos,pos);}return;}
  });
  // Existing launcher gesture controller listens on document; stop propagation of
@@ -276,8 +284,10 @@ function install(){
  $('terminalStatus')?.append(shortcut);
  // Android's actual Back button already delegates to window.goBackInLauncher.
  const oldBack=window.goBackInLauncher;window.goBackInLauncher=()=>back()||(typeof oldBack==='function'&&oldBack());
- window.mekSystemRefresh=()=>{refreshNative();if(S.view!=='closed')draw();};
- invoke('setAppBrightness',prefs.brightness);
+ window.mekSystemRefresh=()=>{if(S.view!=='closed'){S.lastRefresh=0;updateLive();}};
+ // Respect Samsung's current brightness unless the user explicitly opted in.
+ if(prefs.brightnessOverride)invoke('setAppBrightness',prefs.brightness);
+ else invoke('clearAppBrightness');
  setInterval(updateLive,15000);
  draw();
 }

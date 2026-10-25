@@ -26,7 +26,7 @@ async function phone(seed=null){
     }
     return nativeRect.call(this);
   };
-  const calls={launch:[],system:[],widgets:[],widgetTransitions:[],widgetInventories:[],widgetLayers:[],widgetTimeline:[],exports:[],imports:0,pickWidget:0,info:[],iconBatches:[]};
+  const calls={launch:[],system:[],widgets:[],widgetTransitions:[],widgetInventories:[],widgetLayers:[],widgetTimeline:[],exports:[],imports:0,pickWidget:0,info:[],iconBatches:[],refreshedWidgets:[]};
   const apps=Array.from({length:150},(_,i)=>({name:'Application '+String(i).padStart(3,'0'),pkg:'com.example.app'+i}));
   w.MEK={
     battery:()=>JSON.stringify({percent:37,charging:false}),
@@ -50,6 +50,7 @@ async function phone(seed=null){
     requestWidgetCatalog:()=>w.setTimeout(()=>w.mekNativeWidgetCatalog(JSON.stringify([{provider:'com.example.clock/.Widget',package:'com.example.clock',name:'Clock',minWidth:160,minHeight:90,minResizeWidth:100,minResizeHeight:80,maxResizeWidth:380,maxResizeHeight:400,resizeMode:3}])),0),
     requestWidgetPreview:provider=>w.setTimeout(()=>w.mekNativeWidgetPreview(provider,'data:image/webp;base64,AAAA'),0),
     selectWidgetProvider:provider=>{calls.selectedProvider=provider;},
+    refreshWidgetSurface:id=>calls.refreshedWidgets.push(id),
     syncWidgetRects:data=>{
       const value=JSON.parse(data);
       calls.widgets.push(value);
@@ -964,5 +965,86 @@ test('v0.6.3 preserves native widget overlays when a folder opens on a new page'
     'queued transition sync must not reveal native views behind a modal');
   M.closeSheet();await settle();
   assert.equal(calls.widgets.at(-1).allow,true);
+  dom.window.close();
+});
+
+test('v0.7.3 restores widget geometry without recycling Android host IDs from a backup',async()=>{
+  const {dom,M,d,calls}=await phone();
+  M.nativeWidgetChosen(601,'Weather provider',160,100,JSON.stringify({
+    provider:'com.example.clock/.Widget',resizeMode:3,minWidth:160,minHeight:100}));
+  const original=M.model.pages.flatMap(page=>page.items).find(item=>item.nativeId===601);
+  assert.ok(original);
+  const expected={id:original.id,x:original.x,y:original.y,w:original.w,h:original.h,pageId:M.model.current};
+  M.exportBackup();
+  M.backupImported(calls.exports.at(-1));
+  const pending=M.model.pages.flatMap(page=>page.items).find(item=>item.id===expected.id);
+  assert.ok(pending&&pending.needsRebind,'restored native widget must require a new Android binding');
+  assert.equal(pending.nativeId,0);
+  assert.equal(pending.provider,'com.example.clock/.Widget');
+  assert.deepEqual([pending.x,pending.y,pending.w,pending.h],[expected.x,expected.y,expected.w,expected.h]);
+  await settle();
+  assert.ok(!calls.widgetInventories.at(-1).includes(601),'stale provider ID must be excluded from native inventory');
+  assert.ok(d.querySelector('.native-widget-needs-rebind .native-widget-rebind'));
+  d.querySelector('.native-widget-rebind').click();
+  assert.equal(calls.selectedProvider,'com.example.clock/.Widget');
+  assert.equal(M.pendingWidgetRebindId,expected.id);
+  M.nativeWidgetChosen(911,'Weather provider',160,100,JSON.stringify({
+    provider:'com.example.clock/.Widget',resizeMode:3,minWidth:160,minHeight:100}));
+  const fixed=M.model.pages.flatMap(page=>page.items).find(item=>item.id===expected.id);
+  assert.ok(fixed&&!fixed.needsRebind);
+  assert.equal(fixed.nativeId,911);
+  assert.deepEqual([fixed.x,fixed.y,fixed.w,fixed.h],[expected.x,expected.y,expected.w,expected.h]);
+  assert.equal(M.model.pages.find(page=>page.items.some(item=>item.id===fixed.id)).id,expected.pageId);
+  await settle();
+  assert.ok(calls.widgetInventories.at(-1).includes(911));
+  assert.ok(!calls.widgetInventories.at(-1).includes(601));
+  dom.window.close();
+});
+
+test('v0.7.3 cancelling an imported widget rebind leaves its safe placeholder intact',async()=>{
+  const {dom,M,calls,d}=await phone();
+  M.nativeWidgetChosen(1234,'Missing provider',160,100,
+    JSON.stringify({provider:'',resizeMode:3,minWidth:160,minHeight:100}));
+  const added=M.model.pages.flatMap(page=>page.items).find(item=>item.nativeId===1234);
+  assert.ok(added,'test widget must be placed through the real Home grid allocator');
+  M.backupImported(JSON.stringify(M.model));
+  const pending=M.model.pages.flatMap(page=>page.items).find(item=>item.id===added.id);
+  assert.ok(pending?.needsRebind);
+  d.querySelector('.native-widget-needs-rebind .native-widget-rebind').click();
+  assert.equal(calls.pickWidget,1,'missing provider should use Android system picker');
+  M.nativeWidgetError();
+  assert.equal(M.pendingWidgetRebindId,null);
+  assert.ok(M.model.pages.flatMap(page=>page.items).find(item=>item.id===added.id)?.needsRebind);
+  dom.window.close();
+});
+
+test('v0.7.3 a blank Android widget can refresh its view without losing its binding',async()=>{
+  const {dom,M,d,calls}=await phone();
+  M.nativeWidgetChosen(709,'Widget',160,100,JSON.stringify({
+    provider:'com.example.clock/.Widget',resizeMode:3,minWidth:160,minHeight:100}));
+  M.exitEdit();
+  const original=M.model.pages.flatMap(page=>page.items).find(item=>item.nativeId===709);
+  M.nativeWidgetHostStatus(709,'error');
+  const retry=d.querySelector('.native-widget-error');
+  assert.ok(retry);
+  retry.click();
+  assert.deepEqual(calls.refreshedWidgets,[709]);
+  M.nativeWidgetRefreshReady(709);
+  const same=M.model.pages.flatMap(page=>page.items).find(item=>item.id===original.id);
+  assert.equal(same.nativeId,709);
+  assert.equal(same.id,original.id);
+  dom.window.close();
+});
+
+test('v0.7.3 fast Home gestures do not re-inventory unchanged Android widgets',async()=>{
+  const {dom,w,M,d,calls}=await phone();
+  M.mutate(model=>{M.Core.addPage(model,model.current);});
+  await settle();
+  const count=calls.widgetInventories.length;
+  swipe(w,d.getElementById('homeViewport'),320,300,80,302);
+  swipe(w,d.getElementById('homeViewport'),80,302,320,300);
+  await settle();
+  assert.equal(M.model.current,M.model.pages[0].id);
+  assert.equal(calls.widgetInventories.length,count,'navigation must not queue redundant native ID scans');
   dom.window.close();
 });

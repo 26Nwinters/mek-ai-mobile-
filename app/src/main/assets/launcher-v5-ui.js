@@ -129,9 +129,18 @@ M.cellDom=function(item,page){
     title.textContent=item.label||'Android widget';
     const hint=document.createElement('div');hint.className='widget-foot';
     hint.textContent='NATIVE CONTENT APPEARS WHEN EDITING IS DONE';
-    const status=this.nativeWidgetStatuses?.get(item.nativeId);
+    const status=item.needsRebind?'rebind':this.nativeWidgetStatuses?.get(item.nativeId);
     placeholder.dataset.hostStatus=status||'pending';
-    if(status==='error'){
+    if(item.needsRebind){
+      placeholder.classList.add('native-widget-needs-rebind');
+      title.textContent=item.label||'Android widget';
+      hint.textContent='BACKUP RESTORED · ANDROID REQUIRES A NEW WIDGET BINDING';
+      const button=document.createElement('button');button.type='button';
+      button.className='native-widget-rebind';button.textContent='RECONNECT WIDGET';
+      button.setAttribute('aria-label','Reconnect '+(item.label||'Android widget'));
+      button.onclick=e=>{e.preventDefault();e.stopPropagation();this.beginWidgetRebind(item.id);};
+      placeholder.append(button);
+    }else if(status==='error'){
       placeholder.classList.add('native-widget-error');
       title.textContent='Widget unavailable';
       hint.textContent='TAP TO RETRY ANDROID WIDGET';

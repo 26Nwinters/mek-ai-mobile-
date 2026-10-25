@@ -54,7 +54,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: MEK-AI-Mobile-v0.7.2-PR-TEST-ONLY-UNSTABLE-SIGNATURE
+          name: MEK-AI-Mobile-v0.7.3-PR-TEST-ONLY-UNSTABLE-SIGNATURE
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -116,6 +116,6 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: MEK-AI-Mobile-v0.7.2-PERMANENT-SIGNED-UPGRADE
+          name: MEK-AI-Mobile-v0.7.3-PERMANENT-SIGNED-UPGRADE
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error

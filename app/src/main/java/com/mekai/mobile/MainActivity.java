@@ -69,6 +69,7 @@ public class MainActivity extends Activity {
     private WebView web;
     private FrameLayout stage;
     private AppWidgetHost widgetHost;
+    private boolean widgetHostListening=false;
     private final HashMap<Integer,AppWidgetHostView> widgetViews = new HashMap<>();
     // AppWidgetHostViews are Android siblings ABOVE the WebView, not HTML
     // children. CSS z-index cannot place a folder over them. Block and hide
@@ -194,8 +195,7 @@ public class MainActivity extends Activity {
             releaseWidgetId(staleId);
             getPreferences(MODE_PRIVATE).edit().remove("pendingWidgetId").apply();
         }
-        try { widgetHost.startListening(); }
-        catch (Exception e) { Log.w(TAG,"Widget host start failed",e); }
+        startWidgetListening();
         registerAppChanges();
         web.loadUrl(HOME);
     }
@@ -205,11 +205,35 @@ public class MainActivity extends Activity {
         super.onSaveInstanceState(outState);
     }
 
+    private void startWidgetListening(){
+        if(widgetHost==null||widgetHostListening)return;
+        try{widgetHost.startListening();widgetHostListening=true;}
+        catch(Exception e){Log.w(TAG,"Widget host start failed",e);}
+    }
+    @Override protected void onStart(){
+        super.onStart();
+        if(web!=null)web.resumeTimers();
+        startWidgetListening();
+    }
+    @Override protected void onPause(){
+        if(web!=null)web.onPause();
+        super.onPause();
+    }
+    @Override protected void onStop(){
+        if(web!=null)web.pauseTimers();
+        if(widgetHost!=null&&widgetHostListening){
+            try{widgetHost.stopListening();}catch(Exception e){Log.w(TAG,"Widget host stop failed",e);}
+            widgetHostListening=false;
+        }
+        super.onStop();
+    }
     @Override protected void onDestroy() {
         if (receiverRegistered) {
             try { unregisterReceiver(packageReceiver); } catch(Exception ignored){}
         }
-        if (widgetHost != null) try { widgetHost.stopListening(); } catch(Exception ignored){}
+        if (widgetHost != null && widgetHostListening)
+            try { widgetHost.stopListening(); } catch(Exception ignored){}
+        widgetHostListening=false;
         for (Runnable task : widgetCleanupTasks.values()) widgetCleanupHandler.removeCallbacks(task);
         widgetCleanupTasks.clear();
         for (AppWidgetHostView view : widgetViews.values()) {
@@ -228,6 +252,15 @@ public class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         if (web != null) {
+            web.onResume();
+            // Existing RemoteViews are retained across background transitions.
+            // Re-measure visible surfaces without reallocating widget IDs.
+            for(AppWidgetHostView hostView:widgetViews.values()){
+                if(hostView.getVisibility()==View.VISIBLE){
+                    hostView.requestLayout();
+                    hostView.invalidate();
+                }
+            }
             web.evaluateJavascript("window.refreshNative && window.refreshNative()", null);
             web.evaluateJavascript("window.mekSystemRefresh && window.mekSystemRefresh()", null);
         }
@@ -582,13 +615,16 @@ public class MainActivity extends Activity {
 
     private AppWidgetHostView getOrCreateWidgetView(int id){
         AppWidgetHostView view=widgetViews.get(id);
-        if(view!=null)return view;
         AppWidgetProviderInfo info=AppWidgetManager.getInstance(this).getAppWidgetInfo(id);
         if(info==null){
+            // A removed provider must not keep an invisible stale click surface.
+            if(view!=null){widgetViews.remove(id);stage.removeView(view);}
+            lastWidgetSizes.remove(id);
             reportWidgetStatus(id,"missing");
             Log.w(TAG,"Widget provider missing for host id "+id);
             return null;
         }
+        if(view!=null)return view;
         try{
             view=widgetHost.createView(this,id,info);
             view.setBackgroundColor(android.graphics.Color.TRANSPARENT);
@@ -600,6 +636,16 @@ public class MainActivity extends Activity {
             reportWidgetStatus(id,"error");
             return null;
         }
+    }
+
+    private void refreshWidgetSurface(int id){
+        // Recreate only the VIEW, never release its allocated AppWidgetHost ID.
+        if(widgetHost==null||!widgetLayoutIds.contains(id))return;
+        AppWidgetHostView stale=widgetViews.remove(id);
+        if(stale!=null&&stage!=null){stale.animate().cancel();stage.removeView(stale);}
+        lastWidgetSizes.remove(id);
+        reportedWidgetStatuses.remove(id);
+        callback("window.mekNativeWidgetRefreshReady && window.mekNativeWidgetRefreshReady("+id+")");
     }
 
     /* Native widget surfaces sit above the local WebView at CSS-pixel-derived
@@ -730,6 +776,13 @@ public class MainActivity extends Activity {
             }catch(Exception e){Log.w(TAG,"Torch unavailable",e);}
             return "unavailable";
         }
+        @JavascriptInterface public void clearAppBrightness(){
+            runOnUiThread(()->{
+                android.view.WindowManager.LayoutParams params=getWindow().getAttributes();
+                params.screenBrightness=android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+                getWindow().setAttributes(params);
+            });
+        }
         @JavascriptInterface public void setAppBrightness(int percent){
             final float level=Math.max(.1f,Math.min(1f,percent/100f));
             runOnUiThread(()->{
@@ -820,6 +873,11 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void syncWidgetInventory(String json) {
             if(json==null || json.length()>12000)return;
             runOnUiThread(()->reconcileWidgetInventory(json));
+        }
+
+        @JavascriptInterface public void refreshWidgetSurface(int id){
+            if(id<=0)return;
+            runOnUiThread(()->MainActivity.this.refreshWidgetSurface(id));
         }
 
         @JavascriptInterface public void setWidgetLayerActive(boolean allowed,int revision) {

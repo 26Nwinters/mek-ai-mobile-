@@ -291,6 +291,17 @@ M.renderSheet=function(){
       'Choose the exact width and height in Home grid cells. Use ↔ for width, ↕ for height, or ⤡ for both. Widgets snap to cells, not fixed aspect ratios.'));
     const sizeLabel=E('div','grid-summary','CURRENT SIZE  '+item.w+' × '+item.h);
     host.append(sizeLabel);
+    if(item.type==='android-widget'){
+      if(item.needsRebind){
+        primary(host,'RECONNECT RESTORED ANDROID WIDGET',()=>this.beginWidgetRebind(item.id));
+      }else{
+        primary(host,'REFRESH BLANK ANDROID WIDGET',()=>{
+          this.closeSheet();
+          this.retryNativeWidget(item.nativeId);
+        });
+        help(host,'Recreates the on-screen view without removing its provider binding or your widget position.');
+      }
+    }
     if(lim)host.append(E('p','sheet-help',
       'ANDROID PROVIDER: WIDTH '+(widthEnabled?minW+'–'+maxW:'FIXED AT '+item.w)+
       ' CELLS · HEIGHT '+(heightEnabled?minH+'–'+maxH:'FIXED AT '+item.h)+
