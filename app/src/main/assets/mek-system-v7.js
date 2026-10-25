@@ -20,9 +20,21 @@ function icon(name){return {'wifi':'⌁','bluetooth':'ᛒ','flashlight':'✦','a
 function panelTitle(kicker,title){return '<div class="sys-heading"><button type="button" data-sys-back aria-label="Back">‹</button><div><small>'+kicker+'</small><h2>'+title+'</h2></div><button type="button" data-sys-home aria-label="Return to Home">⌂</button></div>';}
 function navigate(view,push=true){if(push&&S.view!=='closed'&&S.view!==view)S.previous.push(S.view);S.view=view;S.query='';refreshNative();draw();}
 function open(view){if(window.Mek?.edit)window.Mek.exitEdit();if(window.Mek?.activeFolder)window.Mek.closeFolder();if(window.Mek?.sheet)window.Mek.closeSheet();S.previous=[];navigate(view,false);}
-function close(){S.view='closed';S.previous=[];draw();window.Mek?.scheduleWidgetSync?.();}
+function close(){S.view='closed';S.previous=[];S.expanded=false;draw();}
 function back(){if(S.view==='closed'){return false;}if(S.expanded&&S.view==='shade'){S.expanded=false;draw();return true;}if(S.previous.length){navigate(S.previous.pop(),false);return true;}close();return true;}
-function reveal(){const root=$('systemExperience');root.classList.toggle('sys-open',S.view!=='closed');root.setAttribute('aria-hidden',S.view==='closed'?'true':'false');document.body.classList.toggle('system-experience-open',S.view!=='closed');if(S.view!=='closed'){window.Mek?.updateNativeWidgetLayer?.(false);}else{window.Mek?.scheduleWidgetSync?.();}}
+function reveal(){
+ const root=$('systemExperience'),open=S.view!=='closed';
+ const changed=root.classList.contains('sys-open')!==open;
+ root.classList.toggle('sys-open',open);
+ root.setAttribute('aria-hidden',open?'false':'true');
+ document.body.classList.toggle('system-experience-open',open);
+ // A clock tick, notification update or settings redraw is not a Home transition.
+ // Only touch native AppWidgetHostViews when the overlay actually opens/closes.
+ if(changed){
+   if(open)window.Mek?.updateNativeWidgetLayer?.(false);
+   else window.Mek?.scheduleWidgetSync?.();
+ }
+}
 function lockView(){
   const n=S.notifications.length;
   return '<section class="sys-lock"><div class="sys-lock-top"><span>◈　MEK-AI / PERSONAL TERMINAL</span><button type="button" data-sys-view="shade">⌄　NOTICES</button></div>'+
@@ -62,6 +74,26 @@ function refreshNotifications(){
  S.lastRefresh=Date.now();
 }
 function permissionGranted(){return invoke('notificationAccessGranted')===true;}
+function updateLive(){
+ if(S.view==='closed')return;
+ const root=$('systemExperience');
+ const write=(selector,value)=>{const el=root.querySelector(selector);if(el&&el.textContent!==value)el.textContent=value;};
+ // Preserve the actual scroll position and existing notification DOM during
+ // periodic updates instead of rebuilding the entire full-screen overlay.
+ const charge=battery();write('.sys-topbar span:last-child',time()+'　'+(charge===null?'▣':charge+'%'));
+ if(S.view==='shade')write('.sys-shade-clock',time());
+ if(S.view==='lock'){write('.sys-lock-time',time());write('.sys-lock-date',date());}
+ if(Date.now()-S.lastRefresh<=12000)return;
+ const old=JSON.stringify(S.notifications);
+ refreshNotifications();
+ if(old===JSON.stringify(S.notifications))return;
+ if(S.view==='shade'||S.view==='notifications'){
+   const list=root.querySelector(S.view==='shade'?'.sys-shade-notes':'.sys-notifications');
+   if(list){const y=list.scrollTop;list.innerHTML=renderNotifications(S.view==='shade');list.scrollTop=y;}
+ }else if(S.view==='lock'&&prefs.lockNotifications){
+   write('.sys-lock-bottom [data-sys-view="notifications"]','▤　'+S.notifications.length+' NOTIFICATION'+(S.notifications.length===1?'':'S'));
+ }
+}
 function renderNotifications(compact=false){
  if(!permissionGranted())return '<div class="sys-empty"><b>NOTIFICATION ACCESS IS OFF</b><p>Grant MEK-AI notification access to display your actual device notifications. You can revoke it in Android Settings.</p><button data-sys-tile="notification-access">ENABLE ACCESS ↗</button></div>';
  if(!S.notifications.length)return '<div class="sys-empty"><span>◌</span><b>ALL CLEAR</b><p>No visible device notifications right now.</p></div>';
@@ -209,14 +241,29 @@ function install(){
    root.addEventListener(type,e=>e.stopPropagation());
  });
  let touch=null;
- root.addEventListener('touchstart',e=>{if(e.touches.length===1)touch={x:e.touches[0].clientX,y:e.touches[0].clientY};},{passive:true});
+ root.addEventListener('touchstart',e=>{
+   if(e.touches.length!==1){touch=null;return;}
+   const t=e.touches[0];
+   touch={x:t.clientX,y:t.clientY,view:S.view,
+     notes:!!e.target.closest('.sys-shade-notes'),
+     handle:!!e.target.closest('.sys-shade-handle'),
+     control:!!e.target.closest('button,input')};
+ },{passive:true});
  root.addEventListener('touchend',e=>{
    if(!touch||!e.changedTouches.length)return;
-   const dy=e.changedTouches[0].clientY-touch.y;touch=null;
-   if(S.view==='lock'&&dy < -70){close();}
-   else if(S.view==='shade'&&dy < -75){S.expanded?S.expanded=false:close();draw();}
-   else if(S.view==='shade'&&dy > 75){S.expanded=true;draw();}
+   const start=touch;touch=null;
+   const t=e.changedTouches[0],dy=t.clientY-start.y,dx=t.clientX-start.x;
+   if(Math.abs(dy)<70||Math.abs(dy)<Math.abs(dx)*1.2||start.control||S.view!==start.view)return;
+   if(S.view==='lock'&&dy< -70){close();return;}
+   if(S.view!=='shade')return;
+   // Swiping on a notification reveals the full inbox, never sends the user Back.
+   // Swiping inside normal scroll content is left to the WebView's native scroll.
+   if(start.notes&&dy< -75){navigate('notifications');return;}
+   if(!start.handle)return;
+   if(dy>75&&!S.expanded){S.expanded=true;draw();}
+   else if(dy< -75&&S.expanded){S.expanded=false;draw();}
  },{passive:true});
+ root.addEventListener('touchcancel',()=>{touch=null;},{passive:true});
  document.addEventListener('keydown',e=>{if(S.view!=='closed'&&(e.key==='Escape'||e.key==='Backspace'&&!e.target.matches('input,textarea'))){e.preventDefault();back();}},true);
  // Gesture from top bezel to open an in-app replacement shade preview.
  let edge=null;
@@ -231,7 +278,7 @@ function install(){
  const oldBack=window.goBackInLauncher;window.goBackInLauncher=()=>back()||(typeof oldBack==='function'&&oldBack());
  window.mekSystemRefresh=()=>{refreshNative();if(S.view!=='closed')draw();};
  invoke('setAppBrightness',prefs.brightness);
- setInterval(()=>{if(S.view!=='closed'){if(Date.now()-S.lastRefresh>12000)refreshNative();draw();}},15000);
+ setInterval(updateLive,15000);
  draw();
 }
 window.MekSystem={open,close,back,get view(){return S.view;},get preferences(){return {...prefs};},refresh:()=>{refreshNative();draw();}};
