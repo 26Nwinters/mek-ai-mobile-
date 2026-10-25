@@ -35,7 +35,7 @@ const Mek={
   iconBatchCount:0,
   iconObserver:null,history:[],lastToastTimer:null,
   drag:null,gesture:null,gestureSuppressUntil:0,
-  selectedWidget:null,drawerIconMenu:null,
+  selectedWidget:null,drawerIconMenu:null,pendingWidgetRebindId:null,
   systemCatalog:[
     {id:'system-mek',type:'system',kind:'mek',label:'MEK-AI'},
     {id:'system-house',type:'system',kind:'house',label:'House Controls'},
@@ -397,13 +397,13 @@ const Mek={
     clearTimeout(this.nativeWidgetStatusTimer);
     this.nativeWidgetTimer=setTimeout(()=>this.syncNativeWidgets(true),40);
     const activePage=show?Core.pageById(this.model,this.model.current):null;
-    const hasNativeWidgets=!!activePage?.items.some(item=>item.type==='android-widget');
+    const hasNativeWidgets=!!activePage?.items.some(item=>item.type==='android-widget'&&!item.needsRebind&&item.nativeId>0);
     if(hasNativeWidgets){
       this.nativeWidgetStatusTimer=setTimeout(()=>{
         if(!this.canShowNativeWidgets())return;
         const active=Core.pageById(this.model,this.model.current);
         for(const item of (active?.items||[])){
-          if(item.type!=='android-widget')continue;
+          if(item.type!=='android-widget'||item.needsRebind||item.nativeId<=0)continue;
           if(this.nativeWidgetStatuses?.get(item.nativeId)!=='attached')
             this.nativeWidgetHostStatus(item.nativeId,'error');
         }
@@ -426,7 +426,7 @@ const Mek={
         .filter(n=>n.dataset.page===page?.id)
         .flatMap(n=>Array.from(n.querySelectorAll('.grid-cell')));
       for(const item of (page?.items||[])){
-        if(item.type!=='android-widget')continue;
+        if(item.type!=='android-widget'||item.needsRebind||item.nativeId<=0)continue;
         const node=cells.find(n=>n.dataset.uid===item.id);
         if(!node)continue;
         const rect=node.getBoundingClientRect();
@@ -475,6 +475,29 @@ const Mek={
       }else panel.onclick=null;
     }
   },
+  beginWidgetRebind(id){
+    const found=Core.locate(this.model,id);
+    if(!found||found.kind!=='home'||found.item.type!=='android-widget'||!found.item.needsRebind)return false;
+    const bridge=this.native();
+    if(!bridge){this.toast('ANDROID WIDGET REPAIR REQUIRES THE APK');return false;}
+    this.pendingWidgetRebindId=id;
+    this.closeSheet?.();
+    this.setView('home');
+    this.goPage(found.page.id);
+    // Android allocates a fresh host ID and asks the user for binding consent.
+    // A provider that has been uninstalled falls back to the system picker.
+    if(found.item.provider&&typeof bridge.selectWidgetProvider==='function'){
+      try{bridge.selectWidgetProvider(found.item.provider);return true;}
+      catch(e){console.warn('Provider rebind unavailable',e);}
+    }
+    if(typeof bridge.pickAndroidWidget==='function'){
+      try{bridge.pickAndroidWidget();return true;}
+      catch(e){console.warn('Widget picker unavailable',e);}
+    }
+    this.pendingWidgetRebindId=null;
+    this.toast('ANDROID WIDGET PICKER UNAVAILABLE');
+    return false;
+  },
   chooseNativeWidget(){
     const native=this.native();
     if(!native||typeof native.pickAndroidWidget!=='function'){
@@ -496,7 +519,10 @@ const Mek={
     if(added){this.goPage(this.model.current);this.enterEdit();this.toast('ANDROID WIDGET ADDED · PRESS DONE');}
     else this.toast('NO SPACE FOR ANDROID WIDGET');
   },
-  nativeWidgetError(){this.toast('WIDGET PICKER CANCELLED OR UNAVAILABLE');},
+  nativeWidgetError(){
+    this.pendingWidgetRebindId=null;
+    this.toast('WIDGET PICKER CANCELLED · ORIGINAL SPACE PRESERVED');
+  },
   nativeHome(){
     if(this.drag)this.endDrag(true);
     if(this.edit)this.exitEdit();
@@ -644,6 +670,16 @@ const Mek={
     if(typeof json!=='string'||json.length>1500000)throw Error('Invalid backup size');
     const raw=JSON.parse(json);
     if(!raw||raw.version!==5||!Array.isArray(raw.pages))throw Error('This file is not a MEK-AI v0.5 backup');
+    // Widget host IDs belong to the old Android installation, not to the
+    // backup. Never import them as live IDs: they can target unrelated hosts.
+    for(const page of raw.pages){
+      for(const item of (Array.isArray(page?.items)?page.items:[])){
+        if(item?.type==='android-widget'){
+          item.nativeId=0;
+          item.needsRebind=true;
+        }
+      }
+    }
     return Core.normalize(raw);
   },
   exportBackup(){
@@ -668,7 +704,10 @@ const Mek={
       const restored=this.validateBackup(json);
       this.mutate(model=>{Object.keys(model).forEach(k=>delete model[k]);Object.assign(model,restored);});
       this.goPage(this.model.settings.homeDefault);
-      this.closeSheet();this.toast('BACKUP RESTORED');
+      this.pendingWidgetRebindId=null;
+      this.closeSheet();
+      const pending=this.model.pages.flatMap(page=>page.items).filter(item=>item.needsRebind).length;
+      this.toast(pending?'BACKUP RESTORED · RECONNECT '+pending+' ANDROID WIDGET'+(pending===1?'':'S'):'BACKUP RESTORED');
     }catch(e){this.toast('INVALID BACKUP FILE');}
   },
   backupResult(message){this.toast(message==='saved'?'BACKUP FILE SAVED':'BACKUP CANCELLED OR FAILED');},
