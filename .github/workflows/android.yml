@@ -2,7 +2,7 @@ name: Build MEK-AI Mobile APK
 
 on:
   push:
-    branches: [main, fix-v0.6.4-native-widget-visibility, feature/v0.7.0-system-experience]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -46,38 +46,68 @@ jobs:
       - name: Verify launcher and widget interactions
         run: npm test
 
-      - name: Restore persistent debug signing key when configured
-        env:
-          MEK_DEBUG_KEYSTORE_B64: ${{ secrets.MEK_DEBUG_KEYSTORE_B64 }}
-        run: |
-          set -euo pipefail
-          if [ -n "$MEK_DEBUG_KEYSTORE_B64" ]; then
-            mkdir -p "$HOME/.android"
-            printf '%s' "$MEK_DEBUG_KEYSTORE_B64" | base64 --decode > "$HOME/.android/debug.keystore"
-            chmod 600 "$HOME/.android/debug.keystore"
-            keytool -list -keystore "$HOME/.android/debug.keystore" -alias androiddebugkey -storepass android > /dev/null
-            echo "MEK_STABLE_SIGNING=true" >> "$GITHUB_ENV"
-            echo "::notice::Persistent debug keystore restored: upgrades using the SAME key can install in-place."
-          else
-            echo "MEK_STABLE_SIGNING=false" >> "$GITHUB_ENV"
-            echo "::warning::MEK_DEBUG_KEYSTORE_B64 is missing. This APK will have an EPHEMERAL signing key and CANNOT update a previous debug build. Do not distribute as an upgrade."
-          fi
-
-      - name: Build Android APK (SDK 36)
+      - name: Build disposable test APK for pull requests
+        if: github.event_name == 'pull_request'
         run: gradle --no-daemon --stacktrace :app:assembleDebug
 
-      - name: Upload stable-key upgrade APK
-        if: env.MEK_STABLE_SIGNING == 'true'
+      - name: Upload pull request test APK (cannot be used for upgrades)
+        if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: MEK-AI-Mobile-v0.7.1-STABLE-KEY-debug
+          name: MEK-AI-Mobile-v0.7.2-PR-TEST-ONLY-UNSTABLE-SIGNATURE
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Upload temporary-key test APK (not an upgrade)
-        if: env.MEK_STABLE_SIGNING != 'true'
+      - name: Restore and verify permanent app signing key
+        if: github.event_name != 'pull_request'
+        env:
+          MEK_SIGNING_KEYSTORE_B64: ${{ secrets.MEK_SIGNING_KEYSTORE_B64 }}
+          MEK_SIGNING_PASSWORD: ${{ secrets.MEK_SIGNING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MEK_SIGNING_KEYSTORE_B64:-}" ] || [ -z "${MEK_SIGNING_PASSWORD:-}" ]; then
+            echo "::error::Permanent signing not configured. Add MEK_SIGNING_KEYSTORE_B64 and MEK_SIGNING_PASSWORD under Settings > Secrets and variables > Actions. No temporary-key upgrade will be built."
+            exit 1
+          fi
+          KEYFILE="$RUNNER_TEMP/mekai-permanent.p12"
+          umask 077
+          printf '%s' "$MEK_SIGNING_KEYSTORE_B64" | base64 --decode > "$KEYFILE"
+          chmod 600 "$KEYFILE"
+          ACTUAL="$(keytool -list -v -storetype PKCS12 -keystore "$KEYFILE" -alias mekai-home -storepass "$MEK_SIGNING_PASSWORD" | sed -n 's/^.*SHA256: //p' | head -n 1 | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+          EXPECTED="E44DBA69D602BD2AC79411B2D0828CF5E7A5B16B5525B72D33681B520CC71914"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::Signing certificate mismatch: refusing to rotate MEK-AI's permanent key."
+            exit 1
+          fi
+          echo "::notice::Permanent signing certificate verified. The release can update prior installs signed with this key."
+
+      - name: Build permanently signed release APK
+        if: github.event_name != 'pull_request'
+        env:
+          MEK_SIGNING_KEYSTORE_PATH: ${{ runner.temp }}/mekai-permanent.p12
+          MEK_SIGNING_PASSWORD: ${{ secrets.MEK_SIGNING_PASSWORD }}
+        run: gradle --no-daemon --stacktrace :app:assembleRelease
+
+      - name: Verify APK signature matches permanent certificate
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/release/app-release.apk"
+          APK_SIGNER="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
+          test -n "$APK_SIGNER" && test -x "$APK_SIGNER" && test -f "$APK"
+          "$APK_SIGNER" verify --verbose --print-certs "$APK" > "$RUNNER_TEMP/mekai-signature-report.txt"
+          ACTUAL="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/mekai-signature-report.txt" | head -n 1 | tr '[:lower:]' '[:upper:]')"
+          EXPECTED="E44DBA69D602BD2AC79411B2D0828CF5E7A5B16B5525B72D33681B520CC71914"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::APK certificate differs from MEK-AI's pinned permanent signing certificate."
+            exit 1
+          fi
+          echo "::notice::Signed APK verified; stable update signature confirmed."
+
+      - name: Upload permanent-key Android upgrade APK
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: MEK-AI-Mobile-v0.7.1-TEMPORARY-KEY-test-only
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: MEK-AI-Mobile-v0.7.2-PERMANENT-SIGNED-UPGRADE
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error

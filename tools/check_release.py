@@ -22,4 +22,11 @@ assert 'widgetHost.deleteAppWidgetId' in java and 'stage.removeView' in java, "W
 assert 'syncWidgetInventory' in java, "Widget inventory reconciliation required"
 assert 'file:///android_asset/index.html' in java, "Keep previous localStorage origin for existing users"
 assert 'prepare_art.py' in workflow, "Bundled image integrity step required"
+assert 'MEK_SIGNING_KEYSTORE_B64' in workflow and 'MEK_SIGNING_PASSWORD' in workflow, "Permanent signing secrets required"
+assert 'assembleRelease' in workflow and 'PERMANENT-SIGNED-UPGRADE' in workflow, "Only signed release APKs may be distributed as updates"
+assert 'apk-release.apk' not in workflow, "Use actual Android Gradle app-release.apk path"
+assert 'MEK_SIGNING_KEYSTORE_PATH' in gradle and 'mekaiPermanent' in gradle, "Dedicated release key missing"
+assert 'MEK_DEBUG_KEYSTORE_B64' not in workflow, "Do not fallback to disposable debug certificate on release"
+assert 'E44DBA69D602BD2AC79411B2D0828CF5E7A5B16B5525B72D33681B520CC71914' in workflow, "Signing identity must be pinned"
+assert 'versionCode = 19' in gradle, "Transition release must have a higher versionCode"
 print("Release metadata, Android API policy and widget contract verified:", VERSION)
