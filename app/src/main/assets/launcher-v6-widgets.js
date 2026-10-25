@@ -146,6 +146,31 @@ M.nativeWidgetChosen=(function(existing){
     if(!limits.resizeV)limits.minH=limits.maxH=height;
     limits.maxW=Math.max(limits.minW,limits.maxW);
     limits.maxH=Math.max(limits.minH,limits.maxH);
+    const rebindId=this.pendingWidgetRebindId;
+    this.pendingWidgetRebindId=null;
+    if(rebindId){
+      const found=C.locate(this.model,rebindId);
+      if(found?.kind==='home'&&found.item.type==='android-widget'&&found.item.needsRebind){
+        const recovered=this.mutate(model=>{
+          const target=C.locate(model,rebindId)?.item;
+          if(!target||!target.needsRebind)return false;
+          // Preserve imported page, position and dimensions. Android owns the
+          // new binding and any provider-specific configuration.
+          target.nativeId=nativeId;
+          target.needsRebind=false;
+          target.provider=info.provider||target.provider||'';
+          target.label=String(label||target.label||'Android Widget').slice(0,60);
+          target.limits=limits;
+          return true;
+        });
+        if(recovered){
+          this.scheduleWidgetInventorySync();
+          this.scheduleWidgetSync();
+          this.toast('ANDROID WIDGET RECONNECTED');
+          return;
+        }
+      }
+    }
     const item={id:C.uid('android-widget'),type:'android-widget',nativeId,label:String(label||'App widget'),
       provider:info.provider||'',limits,x:0,y:0,w:width,h:height};
     const added=this.mutate(model=>C.addHome(model,item,model.current));
