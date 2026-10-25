@@ -528,3 +528,22 @@ body:not(.editing) .grid-cell[data-type="android-widget"] .native-widget-placeho
   color:#f0c78d;
   padding:4px 0;
 }
+
+/* A restored backup cannot reuse another Android install's widget host IDs.
+   Keep missing widgets visible and actionable even outside edit mode. */
+body:not(.editing) .grid-cell[data-type="android-widget"] .native-widget-placeholder.native-widget-needs-rebind {
+  opacity:1!important;pointer-events:auto!important;
+  background:rgba(29,42,31,.94)!important;
+  border:1px dashed var(--amber)!important;
+  box-shadow:0 4px 16px #0009!important;
+}
+body:not(.editing) .grid-cell[data-type="android-widget"] .native-widget-placeholder.native-widget-needs-rebind > * {
+  opacity:1!important;visibility:visible!important;
+}
+.native-widget-rebind {
+  align-self:stretch;flex-shrink:0;
+  border:1px solid var(--amber);border-radius:7px;
+  background:rgba(218,170,99,.2);color:var(--cream,#f0d2a3);
+  padding:5px;font:700 10px/1.2 monospace;
+  cursor:pointer;
+}
