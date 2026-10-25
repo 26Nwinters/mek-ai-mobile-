@@ -225,11 +225,11 @@ public class MainActivity extends Activity {
         super.onPause();
     }
     @Override protected void onStop(){
+        // The default Home app is reopened many times each day. Tearing down
+        // AppWidgetHost here makes every return expensive, and some providers
+        // redraw late or blank. Keep its ONE listener until onDestroy().
+        // Pause only WebView timers while backgrounded.
         if(web!=null)web.pauseTimers();
-        if(widgetHost!=null&&widgetHostListening){
-            try{widgetHost.stopListening();}catch(Exception e){Log.w(TAG,"Widget host stop failed",e);}
-            widgetHostListening=false;
-        }
         super.onStop();
     }
     @Override protected void onDestroy() {
