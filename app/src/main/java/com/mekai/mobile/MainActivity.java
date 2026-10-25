@@ -877,7 +877,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface public void refreshWidgetSurface(int id){
             if(id<=0)return;
-            runOnUiThread(()->refreshWidgetSurface(id));
+            runOnUiThread(()->MainActivity.this.refreshWidgetSurface(id));
         }
 
         @JavascriptInterface public void setWidgetLayerActive(boolean allowed,int revision) {
