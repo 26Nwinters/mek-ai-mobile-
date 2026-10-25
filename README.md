@@ -1,3 +1,28 @@
+# MEK-AI Mobile v0.7.2 — Permanent APK Signing
+
+MEK-AI Home now builds its personal installable releases using one **pinned, permanent APK signing certificate** rather than generating a new Android debug key each time. The Android package remains `com.mekai.mobile` and the localStorage origin is unchanged. A successful upgrade keeps launcher pages, folders, permissions, settings and third-party widget bindings.
+
+## First-time private key setup
+
+The owner must put two secrets in **Repository Settings > Secrets and variables > Actions > New repository secret** for `26Nwinters/mek-ai-mobile-`. Never commit the key, post the encoded secret in an issue, or include it in a PR. The owner has an accompanying secure backup bundle generated outside this repository.
+
+1. `MEK_SIGNING_KEYSTORE_B64` is the complete **single-line** base64 encoding of the permanent `MEK-AI-Home-Permanent-Signing-Key.p12` file (no quotes or file path).
+2. `MEK_SIGNING_PASSWORD` is the keystore password (the `mekai-home` key uses the same password).
+
+Back up the original `.p12` and password securely in two locations, outside GitHub code and outside this chat. Do not replace the key later. The public certificate SHA-256 fingerprint, pinned in Actions, is:
+
+`E44DBA69D602BD2AC79411B2D0828CF5E7A5B16B5525B72D33681B520CC71914`
+
+When both secrets are configured, open **Actions > Build MEK-AI Mobile APK > Run workflow** on `main` to create `MEK-AI-Mobile-v0.7.2-PERMANENT-SIGNED-UPGRADE`. The ZIP artifact contains `app-release.apk`. The build verifies the original keystore fingerprint and the finished APK's signing certificate before publishing it. If either secret is absent, the wrong password is entered, or a different keystore is used, the workflow **fails without distributing a different-key upgrade**. Pull requests continue to run tests using disposable debug APKs explicitly labeled **TEST ONLY**.
+
+## One last migration from temporary debug APKs
+
+Existing v0.7.1 test builds used ephemeral debug signing. Android will reject an attempt to install v0.7.2 over a differently signed app. **Export the existing launcher layout and save your notes/settings if needed before uninstalling**, and retain Samsung One UI Home as the fallback. Uninstall v0.7.1 and install the new permanently signed release one time. Android uninstall removes app-local data, and some third-party widgets may need to be added/configured again.
+
+For all later updates, keep `com.mekai.mobile`, use this same `.p12` key, and increase `versionCode`. New releases then install in place with no change to the chosen Home launcher; users may need to accept the Android installer prompt. This is not an automatic update delivery service, just stable signing for APK upgrades.
+
+---
+
 # MEK-AI Mobile v0.7.1 — Notification Swipe and Performance Repair
 
 **Patch release for the v0.7.0 prototype.** Swiping upward over notifications in the quick shade opens the full inbox instead of unexpectedly returning Home. Vertical scrolling within the inbox is not intercepted; only dragging the shade handle expands or collapses quick settings.
