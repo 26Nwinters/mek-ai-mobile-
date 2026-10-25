@@ -8,7 +8,8 @@ const asset=name=>fs.readFileSync(path.join(root,'app/src/main/assets',name),'ut
 function prototype(options={}){
  const dom=new JSDOM(asset('index.html'),{url:'https://mek.test/',runScripts:'outside-only',pretendToBeVisual:true});
  const w=dom.window;
- const actions={system:[],opened:[],dismissed:[],brightness:[],torch:0,widgetLayers:0};
+ if(options.systemPrefs)w.localStorage.setItem('mek_system_v7',JSON.stringify(options.systemPrefs));
+ const actions={system:[],opened:[],dismissed:[],brightness:[],clearBrightness:0,torch:0,widgetLayers:0};
  const intervals=[];
  w.setInterval=(fn,ms)=>{intervals.push({fn,ms});return intervals.length;};
  w.Mek={scheduleWidgetSync(){actions.widgetLayers++},updateNativeWidgetLayer(enabled){actions.layerActive=enabled;},edit:false};
@@ -22,7 +23,8 @@ function prototype(options={}){
   openDefault:kind=>actions.system.push(kind),
   isTorchOn:()=>false,
   toggleTorch:()=>{actions.torch++;return options.torch||'on';},
-  setAppBrightness:n=>actions.brightness.push(n)
+  setAppBrightness:n=>actions.brightness.push(n),
+  clearAppBrightness:()=>actions.clearBrightness++
  };
  w.eval(asset('mek-system-v7.js'));
  w.document.dispatchEvent(new w.Event('DOMContentLoaded',{bubbles:true}));
@@ -193,3 +195,41 @@ test('navigation avoids native inventory scans and widget retries on empty Home 
  assert.ok(ui.includes('if(mountedChanged){this.refreshClock();this.refreshBattery();}'));
 });
 function domClose(w){w.close();}
+
+test('v0.7.3 follows Android brightness until user explicitly changes it',()=>{
+ const {w,root,actions}=prototype();
+ assert.equal(actions.brightness.length,0,'opening the launcher must not set a fixed brightness');
+ assert.equal(actions.clearBrightness,1);
+ w.MekSystem.open('settings');
+ tap(w,'[data-sys-category="display"]');
+ assert.match(root.textContent,/FOLLOWING SYSTEM/);
+ const slider=root.querySelector('[data-sys-brightness]');
+ slider.value='41';slider.dispatchEvent(new w.Event('input',{bubbles:true}));
+ assert.deepEqual(actions.brightness,[41]);
+ assert.equal(w.MekSystem.preferences.brightnessOverride,true);
+ assert.match(w.localStorage.getItem('mek_system_v7'),/"brightnessOverride":true/);
+ tap(w,'[data-sys-auto-brightness]');
+ assert.equal(actions.clearBrightness,2);
+ assert.equal(w.MekSystem.preferences.brightnessOverride,false);
+ assert.match(root.textContent,/FOLLOWING SYSTEM/);
+ domClose(w);
+});
+
+test('v0.7.3 honors a persisted explicit brightness override',()=>{
+ const {w,actions}=prototype({systemPrefs:{brightnessOverride:true,brightness:73}});
+ assert.deepEqual(actions.brightness,[73]);
+ assert.equal(actions.clearBrightness,0);
+ domClose(w);
+});
+
+test('v0.7.3 Android resume retains an open inbox and its scroll position',()=>{
+ const {w,root}=prototype({permission:true,notifications:[{key:'msg',app:'Messages',title:'Message',text:'Hi'}]});
+ w.MekSystem.open('notifications');
+ const scroller=root.querySelector('.sys-content'),item=root.querySelector('.sys-notification');
+ scroller.scrollTop=98;
+ w.mekSystemRefresh();
+ assert.equal(root.querySelector('.sys-content'),scroller);
+ assert.equal(root.querySelector('.sys-notification'),item);
+ assert.equal(scroller.scrollTop,98);
+ domClose(w);
+});
