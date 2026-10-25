@@ -284,7 +284,7 @@ function install(){
  $('terminalStatus')?.append(shortcut);
  // Android's actual Back button already delegates to window.goBackInLauncher.
  const oldBack=window.goBackInLauncher;window.goBackInLauncher=()=>back()||(typeof oldBack==='function'&&oldBack());
- window.mekSystemRefresh=()=>{refreshNative();if(S.view!=='closed')draw();};
+ window.mekSystemRefresh=()=>{if(S.view!=='closed'){S.lastRefresh=0;updateLive();}};
  // Respect Samsung's current brightness unless the user explicitly opted in.
  if(prefs.brightnessOverride)invoke('setAppBrightness',prefs.brightness);
  else invoke('clearAppBrightness');
