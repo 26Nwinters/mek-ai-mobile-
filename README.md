@@ -1,3 +1,13 @@
+# MEK-AI Mobile v0.7.1 — Notification Swipe and Performance Repair
+
+**Patch release for the v0.7.0 prototype.** Swiping upward over notifications in the quick shade opens the full inbox instead of unexpectedly returning Home. Vertical scrolling within the inbox is not intercepted; only dragging the shade handle expands or collapses quick settings.
+
+**Performance:** Live refreshes no longer reconstruct the entire overlay every 15 seconds. Notification DOM and scroll positions survive background updates. Home page swipes avoid unnecessary Android widget-inventory scans, battery bridge reads and clock canvas redraws. Third-party widget restoration retries remain for Home pages with native widgets.
+
+**Validation:** Added jsdom gesture, scroll and refresh regression tests plus Android CI compilation. Smoothness and widget-provider rendering still require an actual Galaxy device test. This remains an Android launcher/in-app system preview, not an OS replacement. VersionCode 18. Existing APK signing/upgrade cautions below continue to apply.
+
+---
+
 # MEK-AI Mobile v0.7.0 — System Experience Prototype
 
 **An interactive Android APK prototype, not a replacement operating system.** Builds on the existing Android Home launcher without changing its storage key, widget bindings, Home model or established MEK-AI art.
