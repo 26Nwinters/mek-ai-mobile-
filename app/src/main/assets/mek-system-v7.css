@@ -58,7 +58,7 @@
 #systemExperience .sys-brightness input{flex:1;width:100%;accent-color:var(--sys-accent);height:24px}
 #systemExperience .sys-shade-row{display:flex;justify-content:space-between;gap:12px;padding:8px 2px}
 #systemExperience .sys-shade-row button,#systemExperience .sys-section-tail button{color:var(--sys-accent);font:700 10px monospace;letter-spacing:.07em}
-#systemExperience .sys-shade-notes{margin-top:10px;max-height:270px;overflow:auto}
+#systemExperience .sys-shade-notes{margin-top:10px;max-height:270px;overflow:auto;overscroll-behavior:contain;touch-action:pan-y}
 #systemExperience .sys-notification-list{display:flex;flex-direction:column;gap:10px}
 #systemExperience .sys-notification{display:flex;gap:12px;background:rgba(33,43,35,.93);border:1px solid var(--sys-edge);border-radius:15px;padding:14px}
 #systemExperience .sys-notification-icon{width:30px;height:30px;display:grid;place-items:center;background:#111a14;border-radius:8px;color:var(--sys-accent);flex-shrink:0}

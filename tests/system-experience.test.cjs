@@ -9,6 +9,8 @@ function prototype(options={}){
  const dom=new JSDOM(asset('index.html'),{url:'https://mek.test/',runScripts:'outside-only',pretendToBeVisual:true});
  const w=dom.window;
  const actions={system:[],opened:[],dismissed:[],brightness:[],torch:0,widgetLayers:0};
+ const intervals=[];
+ w.setInterval=(fn,ms)=>{intervals.push({fn,ms});return intervals.length;};
  w.Mek={scheduleWidgetSync(){actions.widgetLayers++},updateNativeWidgetLayer(enabled){actions.layerActive=enabled;},edit:false};
  w.MEK={
   battery:()=>JSON.stringify({percent:82,charging:false}),
@@ -24,21 +26,21 @@ function prototype(options={}){
  };
  w.eval(asset('mek-system-v7.js'));
  w.document.dispatchEvent(new w.Event('DOMContentLoaded',{bubbles:true}));
- return {w,dom,actions,root:w.document.getElementById('systemExperience')};
+ return {w,dom,actions,intervals,root:w.document.getElementById('systemExperience')};
 }
 function tap(w,selector){
  const target=w.document.querySelector(selector);
  assert.ok(target,'Missing expected interactive control: '+selector);
  target.click();
 }
-test('v0.7.0 prototype is bundled and loaded after the regular launcher',()=>{
+test('v0.7.1 prototype is bundled and loaded after the regular launcher',()=>{
  const html=asset('index.html');
  assert.match(html,/id="systemExperience"/);
  assert.match(html,/mek-system-v7\.css/);
  assert.match(html,/mek-system-v7\.js/);
  assert.ok(html.indexOf('launcher-v5-gestures.js')<html.indexOf('mek-system-v7.js'));
  const gradle=fs.readFileSync(path.join(root,'app/build.gradle.kts'),'utf8');
- assert.match(gradle,/versionName = "0\.7\.0"/);
+ assert.ok(gradle.includes('versionName = "0.7.1"'));
 });
 test('shade opens from Home and closing restores native Android widgets',()=>{
  const {w,actions,root}=prototype();
@@ -123,5 +125,71 @@ test('overlay gates native widgets even if normal Home re-sync fires',()=>{
  const manifest=fs.readFileSync(path.join(root,'app/src/main/AndroidManifest.xml'),'utf8');
  assert.match(manifest,/BIND_NOTIFICATION_LISTENER_SERVICE/);
  assert.match(manifest,/android:name="\.MekNotificationListener"/);
+});
+
+function swipe(w,element,fromY,toY){
+ const first=new w.Event('touchstart',{bubbles:true,cancelable:true});
+ first.touches=[{clientX:125,clientY:fromY}];
+ element.dispatchEvent(first);
+ const last=new w.Event('touchend',{bubbles:true,cancelable:true});
+ last.changedTouches=[{clientX:125,clientY:toY}];
+ element.dispatchEvent(last);
+}
+test('swipe up on shade notification opens full inbox instead of leaving the panel',()=>{
+ const {w,root}=prototype({permission:true,notifications:[
+   {key:'msg1',app:'Messages',title:'One',text:'First'},
+   {key:'msg2',app:'Messages',title:'Two',text:'Second'}
+ ]});
+ w.MekSystem.open('shade');
+ swipe(w,root.querySelector('.sys-notification'),400,220);
+ assert.equal(w.MekSystem.view,'notifications');
+ assert.match(root.textContent,/First/);
+ // Normal scrolling in the inbox must never trigger Back/Close.
+ const scroll=root.querySelector('.sys-content');
+ scroll.scrollTop=60;
+ swipe(w,root.querySelector('.sys-notification'),400,200);
+ assert.equal(w.MekSystem.view,'notifications');
+ assert.equal(root.querySelector('.sys-content'),scroll);
+ assert.equal(scroll.scrollTop,60);
+ domClose(w);
+});
+test('swiping upward through shade content never closes the shade',()=>{
+ const {w,root}=prototype({permission:true});
+ w.MekSystem.open('shade');
+ const scroll=root.querySelector('.sys-content');
+ scroll.scrollTop=70;
+ swipe(w,root.querySelector('.sys-shade-clock'),390,190);
+ assert.equal(w.MekSystem.view,'shade');
+ assert.equal(root.querySelector('.sys-content'),scroll);
+ assert.equal(scroll.scrollTop,70);
+ domClose(w);
+});
+test('periodic live refresh preserves notification nodes and scroll unless messages change',()=>{
+ const options={permission:true,notifications:[{key:'msg1',app:'Messages',title:'One',text:'First'}]};
+ const {w,root,intervals}=prototype(options);
+ w.MekSystem.open('notifications');
+ const scroll=root.querySelector('.sys-content'),item=root.querySelector('.sys-notification');
+ scroll.scrollTop=110;
+ const clock=intervals.find(x=>x.ms===15000);
+ assert.ok(clock,'Expected lightweight 15-second live update');
+ clock.fn();
+ assert.equal(root.querySelector('.sys-notification'),item);
+ assert.equal(root.querySelector('.sys-content'),scroll);
+ assert.equal(scroll.scrollTop,110);
+ const now=w.Date.now;
+ w.Date.now=()=>now()+20000;
+ options.notifications.push({key:'msg2',app:'Camera',title:'Two',text:'Second'});
+ clock.fn();
+ assert.match(root.textContent,/Second/);
+ assert.equal(root.querySelector('.sys-content'),scroll);
+ assert.equal(scroll.scrollTop,110);
+ w.Date.now=now;
+ domClose(w);
+});
+test('navigation avoids native inventory scans and widget retries on empty Home pages',()=>{
+ const js=asset('launcher-v5.js'),ui=asset('launcher-v5-ui.js');
+ assert.ok(js.includes('this.persist(null,false)'));
+ assert.ok(js.includes('if(hasNativeWidgets)'));
+ assert.ok(ui.includes('if(mountedChanged){this.refreshClock();this.refreshBattery();}'));
 });
 function domClose(w){w.close();}

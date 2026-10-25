@@ -193,6 +193,7 @@ M.hydrateHomePages=function(){
   const pages=this.model.pages;
   const current=Math.max(0,pages.findIndex(p=>p.id===this.model.current));
   const dimensions=this.model.settings.homeCols+'x'+this.model.settings.homeRows;
+  let mountedChanged=false;
   for(const [index,page] of pages.entries()){
     const surface=$('homeTrack').children[index];if(!surface)continue;
     const shouldMount=Math.abs(current-index)<=1;
@@ -204,13 +205,17 @@ M.hydrateHomePages=function(){
       if(surface.dataset.mounted!=='true'||surface._renderSignature!==signature){
         this.populateHomePage(surface,page,index);
         surface._renderSignature=signature;
+        mountedChanged=true;
       }
     }else if(surface.dataset.mounted==='true'){
       surface.replaceChildren();surface.dataset.mounted='false';
       surface._renderSignature=null;
     }
   }
-  this.refreshClock();this.refreshBattery();this.scheduleIconDrain();
+  // The 30-second clock/battery timer handles ongoing refreshes. Swiping
+  // between already mounted pages should not redraw every canvas or call JNI.
+  if(mountedChanged){this.refreshClock();this.refreshBattery();}
+  this.scheduleIconDrain();
 };
 M.renderHome=function(){
   const track=$('homeTrack');if(!track)return;
