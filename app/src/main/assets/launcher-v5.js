@@ -469,11 +469,22 @@ const Mek={
         if(hint)hint.textContent='TAP TO RETRY ANDROID WIDGET';
         panel.onclick=e=>{
           e.stopPropagation();
-          this.lastWidgetPayload=null;
-          this.syncNativeWidgets(true);
+          this.retryNativeWidget(id);
         };
       }else panel.onclick=null;
     }
+  },
+  retryNativeWidget(id){
+    const widget=this.model.pages.flatMap(page=>page.items).find(item=>
+      item.type==='android-widget'&&item.nativeId===id&&!item.needsRebind);
+    if(!widget)return;
+    const native=this.native();
+    if(native&&typeof native.refreshWidgetSurface==='function'){
+      try{native.refreshWidgetSurface(id);return;}
+      catch(e){console.warn('Could not recreate Android widget view',e);}
+    }
+    this.lastWidgetPayload=null;
+    this.syncNativeWidgets(true);
   },
   beginWidgetRebind(id){
     const found=Core.locate(this.model,id);
@@ -518,6 +529,12 @@ const Mek={
     const added=this.mutate(model=>Core.addHome(model,item,model.current));
     if(added){this.goPage(this.model.current);this.enterEdit();this.toast('ANDROID WIDGET ADDED · PRESS DONE');}
     else this.toast('NO SPACE FOR ANDROID WIDGET');
+  },
+  nativeWidgetRefreshReady(id){
+    if(!this.model.pages.some(page=>page.items.some(item=>item.nativeId===id)))return;
+    this.lastWidgetPayload=null;
+    this.syncNativeWidgets(true);
+    this.toast('WIDGET VIEW REFRESHED');
   },
   nativeWidgetError(){
     this.pendingWidgetRebindId=null;
@@ -787,6 +804,7 @@ window.mekBackupResult=message=>Mek.backupResult(message);
 window.mekNativeWidgetChosen=(...args)=>Mek.nativeWidgetChosen(...args);
 window.mekNativeWidgetStatus=(id,status)=>Mek.nativeWidgetHostStatus(id,status);
 window.mekNativeWidgetError=()=>Mek.nativeWidgetError();
+window.mekNativeWidgetRefreshReady=id=>Mek.nativeWidgetRefreshReady(id);
 window.mekAppsChanged=()=>Mek.appsChanged();
 window.mekNativeHome=()=>Mek.nativeHome();
 window.addEventListener('DOMContentLoaded',()=>Mek.install());
