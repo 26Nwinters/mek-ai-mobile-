@@ -158,3 +158,34 @@ test('v0.7.3 respects system brightness and retains the same stable signing iden
  assert.match(workflow,/assembleRelease/);
  assert.match(workflow,/MEK_SIGNING_KEYSTORE_B64/);
 });
+
+test('v0.7.4 icon requests cannot queue behind slow Android installed-app discovery',()=>{
+ const getApps=java.split('@JavascriptInterface public void requestApps() {')[1]?.split('@JavascriptInterface public String getApps()')[0];
+ const getIcons=java.split('@JavascriptInterface public void requestAppIcons(String json) {')[1]?.split('@JavascriptInterface public void requestAppIcon(String pkg)')[0];
+ assert.ok(getApps&&getIcons);
+ assert.match(getApps,/appExecutor\.execute/);
+ assert.match(getIcons,/iconExecutor\.execute/);
+ assert.doesNotMatch(getIcons,/appExecutor\.execute/);
+ assert.match(java,/iconExecutor\.shutdownNow\(\)/);
+});
+
+test('v0.7.4 leaves Android AppWidgetHost listening while Home is backgrounded',()=>{
+ const onStop=java.split('@Override protected void onStop(){')[1]?.split('@Override protected void onDestroy()')[0];
+ assert.ok(onStop);
+ assert.match(onStop,/web\.pauseTimers\(\)/);
+ assert.doesNotMatch(onStop,/widgetHost\.stopListening\(\)/);
+ assert.match(java,/widgetHost\.stopListening\(\)/,'widget host still stops on final destruction');
+});
+
+test('v0.7.4 limits disk icons to pinned Home and dock while retaining data on upgrade',()=>{
+ const js=read('app/src/main/assets/launcher-v5.js');
+ assert.match(js,/PINNED_ICON_KEY='mek_home_icons_v1'/);
+ assert.match(js,/PINNED_ICON_MAX_AGE/);
+ assert.match(js,/pinnedIconPackages\(\)/);
+ assert.match(js,/schedulePinnedIconSave\(\)/);
+ assert.match(js,/localStorage\.removeItem\(PINNED_ICON_KEY\)/);
+ assert.match(js,/const KEY='mek_launcher_v5'/);
+ const build=read('.github/workflows/android.yml');
+ assert.match(build,/E44DBA69D602BD2AC79411B2D0828CF5E7A5B16B5525B72D33681B520CC71914/);
+ assert.match(build,/assembleRelease/);
+});
