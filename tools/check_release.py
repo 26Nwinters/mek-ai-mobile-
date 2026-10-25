@@ -28,5 +28,5 @@ assert 'apk-release.apk' not in workflow, "Use actual Android Gradle app-release
 assert 'MEK_SIGNING_KEYSTORE_PATH' in gradle and 'mekaiPermanent' in gradle, "Dedicated release key missing"
 assert 'MEK_DEBUG_KEYSTORE_B64' not in workflow, "Do not fallback to disposable debug certificate on release"
 assert 'E44DBA69D602BD2AC79411B2D0828CF5E7A5B16B5525B72D33681B520CC71914' in workflow, "Signing identity must be pinned"
-assert re.search(r'versionCode\\s*=\\s*19\\b',gradle), "Transition release must have a higher versionCode"
+assert 'versionCode = 19' in gradle, "Transition release must have a higher versionCode"
 print("Release metadata, Android API policy and widget contract verified:", VERSION)
