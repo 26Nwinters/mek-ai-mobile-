@@ -1003,17 +1003,18 @@ test('v0.7.3 restores widget geometry without recycling Android host IDs from a 
 
 test('v0.7.3 cancelling an imported widget rebind leaves its safe placeholder intact',async()=>{
   const {dom,M,calls,d}=await phone();
-  const snapshot=JSON.parse(JSON.stringify(M.model));
-  snapshot.pages[0].items.push({id:'pending-rebind',type:'android-widget',
-    nativeId:1234,provider:'',label:'Missing provider',x:1,y:3,w:2,h:2});
-  M.backupImported(JSON.stringify(snapshot));
-  const pending=M.model.pages[0].items.find(item=>item.id==='pending-rebind');
+  M.nativeWidgetChosen(1234,'Missing provider',160,100,
+    JSON.stringify({provider:'',resizeMode:3,minWidth:160,minHeight:100}));
+  const added=M.model.pages.flatMap(page=>page.items).find(item=>item.nativeId===1234);
+  assert.ok(added,'test widget must be placed through the real Home grid allocator');
+  M.backupImported(JSON.stringify(M.model));
+  const pending=M.model.pages.flatMap(page=>page.items).find(item=>item.id===added.id);
   assert.ok(pending?.needsRebind);
   d.querySelector('.native-widget-needs-rebind .native-widget-rebind').click();
   assert.equal(calls.pickWidget,1,'missing provider should use Android system picker');
   M.nativeWidgetError();
   assert.equal(M.pendingWidgetRebindId,null);
-  assert.ok(M.model.pages[0].items.find(item=>item.id==='pending-rebind')?.needsRebind);
+  assert.ok(M.model.pages.flatMap(page=>page.items).find(item=>item.id===added.id)?.needsRebind);
   dom.window.close();
 });
 
