@@ -151,7 +151,7 @@ test('v0.7.3 respects system brightness and retains the same stable signing iden
  assert.match(system,/brightnessOverride:false/);
  assert.match(system,/clearAppBrightness/);
  assert.match(java,/BRIGHTNESS_OVERRIDE_NONE/);
- assert.match(gradle,/versionCode\s*=\s*20/);
+ assert.match(gradle,/versionCode\s*=\s*21/);
  assert.match(gradle,/applicationId = "com\.mekai\.mobile"/);
  const workflow=read('.github/workflows/android.yml');
  assert.match(workflow,/E44DBA69D602BD2AC79411B2D0828CF5E7A5B16B5525B72D33681B520CC71914/);
