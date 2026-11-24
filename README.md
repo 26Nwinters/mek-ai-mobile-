@@ -1,3 +1,14 @@
+# MEK-AI Mobile v0.7.5 — Icon Reliability & App Info
+
+In-place update (Android versionCode 22) using the existing permanent signing key, application ID, layout storage and widget bindings.
+
+- Native app icon requests retain visible targets, retry transient failures with bounded backoff, and retain the letter fallback until image decoding succeeds. Empty native results are not cached.
+- Bundled inline vector icons replace font-dependent system shortcuts and Quick Settings/category glyphs. No external image dependency is introduced.
+- Hold a Home, dock, drawer or folder app and select App Settings / Info to open Android permissions, storage, cache and other app settings. Home layout editing remains an explicit option, and dragging still works on unlocked Home.
+- Reduce expensive backdrop blur and continuous companion animation; actual responsiveness and device-specific image decoding still need a Galaxy device check.
+
+---
+
 # MEK-AI Mobile v0.7.4 — Home Icon Performance Repair
 
 This is an in-place update to the existing permanently signed MEK-AI Home, preserving `com.mekai.mobile`, the `mek_launcher_v5` layout/storage origin, Android widget bindings, Home/dock organization, and the v0.7.2+ pinned release-signing certificate. Android `versionCode 21` upgrades v0.7.3 without uninstalling.

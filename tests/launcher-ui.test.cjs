@@ -1099,3 +1099,37 @@ test('v0.7.4 ignores expired or malformed Home icon cache entries',async()=>{
     'expired icons require native decoding rather than displaying stale thumbnails');
   dom.window.close();
 });
+
+test('v0.7.5 app info works on Home, dock and folders without editing the layout',async()=>{
+  const {dom,M,w,d,calls}=await phone();await settle();
+  const app={id:'info-home',type:'app',pkg:'com.example.app12',label:'Pinned',x:0,y:0,w:1,h:1};
+  M.mutate(model=>M.Core.addHome(model,app,model.current));
+  const tile=d.querySelector('[data-uid="info-home"]');
+  assert.ok(tile);
+  touch(w,tile,'touchstart',160,230);await new Promise(r=>setTimeout(r,520));
+  touch(w,tile,'touchend',160,230);
+  assert.equal(M.sheet,'home-app-actions');assert.equal(M.edit,false);
+  const info=()=>Array.from(d.querySelectorAll('#sheetBody .option-button')).find(n=>n.textContent.includes('APP SETTINGS'));
+  info().click();assert.equal(calls.info.at(-1),app.pkg);
+  M.mutate(model=>{model.dock[0]={...app,id:'info-dock'};});
+  d.querySelector('[data-uid="info-dock"]').dispatchEvent(new w.MouseEvent('contextmenu',{bubbles:true,cancelable:true}));
+  assert.equal(M.sheet,'home-app-actions');info().click();assert.equal(calls.info.at(-1),app.pkg);
+  M.mutate(model=>M.Core.addHome(model,{id:'info-folder',type:'folder',name:'Apps',apps:[{pkg:app.pkg,label:app.label}]},model.current));
+  M.openFolder('info-folder');M.openSheet('folder-app-actions',{app});
+  info().click();assert.equal(calls.info.length,3);
+  dom.window.close();
+});
+test('v0.7.5 image failure keeps a visible fallback and queues bounded retries',async()=>{
+  const {dom,M,w,d}=await phone();await settle();
+  const pkg='com.example.app145',node=d.createElement('span');node.textContent='A';d.body.append(node);
+  M.loadIcon(node,pkg);M.iconReady(pkg,'data:image/webp;base64,AAAA');
+  const img=node.querySelector('img');
+  assert.ok(img.hidden);assert.equal(node.querySelector('.icon-fallback').hidden,false);
+  img.dispatchEvent(new w.Event('error'));
+  assert.equal(node.querySelector('img'),null);assert.equal(node.querySelector('.icon-fallback').hidden,false);
+  assert.ok(M.iconPending.get(pkg).has(node));assert.ok(M.iconQueue.includes(pkg));
+  M.iconReady(pkg,'data:image/png;base64,AAAA');node.querySelector('img').dispatchEvent(new w.Event('load'));
+  assert.equal(node.querySelector('img').hidden,false);assert.equal(node.querySelector('.icon-fallback').hidden,true);
+  assert.ok(M.systemIcon('phone').includes('<svg'));assert.ok(M.systemIcon('wifi').includes('<path'));
+  dom.window.close();
+});

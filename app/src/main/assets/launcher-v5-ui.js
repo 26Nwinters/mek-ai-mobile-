@@ -25,7 +25,7 @@ M.iconDom=function(item,options={}){
   let name=item.label||item.name||item.kind||'Application';
   if(item.type==='app'){
     const initial=document.createElement('span');
-    initial.textContent=name.charAt(0).toUpperCase()||'?';
+    initial.className='icon-fallback';initial.textContent=name.charAt(0).toUpperCase()||'?';
     symbol.append(initial);
     symbol.classList.add('app-installed');
     // Actual native icons replace the initial letter asynchronously.
@@ -42,7 +42,7 @@ M.iconDom=function(item,options={}){
       const mini=document.createElement('span');mini.className='folder-mini';mini.textContent='·';symbol.append(mini);
     }
   }else{
-    symbol.textContent=this.systemGlyphs[item.kind]||'◈';
+    symbol.innerHTML=this.systemIcon(item.kind);
     symbol.classList.add('system-'+item.kind);
   }
   label.textContent=name;

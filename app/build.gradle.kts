@@ -12,8 +12,8 @@ android {
         applicationId = "com.mekai.mobile"
         minSdk = 31
         targetSdk = 36
-        versionCode = 21
-        versionName = "0.7.4"
+        versionCode = 22
+        versionName = "0.7.5"
     }
     signingConfigs {
         create("mekaiPermanent") {

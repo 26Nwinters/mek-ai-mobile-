@@ -65,7 +65,7 @@ M.renderSheet=function(){
     'grid-apps':'APPS SCREEN GRID','grid-folders':'FOLDER GRID',pages:'MANAGE HOME PAGES',
     dock:'DOCK / HOTBAR',appearance:'ICONS & WALLPAPER',themes:'TERMINAL THEMES',
     gestures:'SWIPE GESTURES',backup:'BACKUP & RESTORE',reset:'RESET LAUNCHER',
-    'drawer-sort':'APP DRAWER ORDER','app-actions':'APPLICATION OPTIONS',
+    'drawer-sort':'APP DRAWER ORDER','app-actions':'APPLICATION OPTIONS','home-app-actions':'APPLICATION OPTIONS',
     'dock-select':'CHOOSE DOCK APPLICATION','folder-color':'FOLDER APPEARANCE',
     'resize':'RESIZE WIDGET','notes-edit':'WORKSHOP NOTE','tasks-edit':'TODAY\'S TASKS',
     'folder-create':'CREATE FOLDER','folder-app-actions':'FOLDER APPLICATION'
@@ -430,6 +430,7 @@ M.renderSheet=function(){
   }
 
   if(kind==='app-actions'){this.renderAppActions(host,opts);return;}
+  if(kind==='home-app-actions'){this.renderHomeAppActions(host,opts);return;}
   if(kind==='folder-app-actions'){this.renderFolderAppActions(host,opts);return;}
 };
 const WIDGET_DEFAULTS={mek:[4,2],clock:[2,2],battery:[2,1],tasks:[4,2],notes:[4,2],weather:[2,1],music:[4,1],house:[4,1],calendar:[2,1]};
@@ -531,10 +532,7 @@ M.renderAppActions=function(host,opts){
         });this.closeSheet();this.renderDrawer();this.toast('APP MOVED TO FRONT');
       });
     }
-    opt(host,'⚙ APP SETTINGS / INFO','Android permissions, notifications, storage and uninstall settings.',()=>{
-      this.closeSheet();try{this.native()?.showAppInfo(item.pkg);}
-      catch(e){this.toast('APP INFO UNAVAILABLE');}
-    });
+    this.addAppInfoOption(host,item.pkg);
   }
   if(item.type==='folder'){
     opt(host,'✎ RENAME / ORGANIZE FOLDER',null,()=>{
@@ -551,11 +549,29 @@ M.renderAppActions=function(host,opts){
     });
   }
 };
+M.addAppInfoOption=function(host,pkg){
+  opt(host,'APP SETTINGS / INFO','Android permissions, notifications, storage, cache and uninstall settings.',()=>{
+    this.closeSheet();
+    try{
+      const api=this.native();
+      if(!api||typeof api.showAppInfo!=='function'||!C.packageOk(pkg))throw Error('Unavailable');
+      api.showAppInfo(pkg);
+    }catch(e){this.toast('APP INFO UNAVAILABLE');}
+  });
+};
+M.renderHomeAppActions=function(host,opts){
+  const item=opts.item;if(!item||item.type!=='app')return;
+  help(host,item.label||'APPLICATION');
+  opt(host,'OPEN APP',null,()=>{this.closeSheet();this.launchApp(item.pkg);});
+  this.addAppInfoOption(host,item.pkg);
+  if(!this.model.settings.layoutLocked)opt(host,'EDIT HOME LAYOUT',null,()=>{this.closeSheet();this.enterEdit();});
+};
 M.renderFolderAppActions=function(host,opts){
   const app=opts.app,folder=this.findFolder(this.activeFolder);
   if(!app||!folder)return;
   help(host,'FOLDER / '+(app.label||'APPLICATION'));
   opt(host,'OPEN APP',null,()=>{this.closeSheet();this.launchApp(app.pkg);});
+  this.addAppInfoOption(host,app.pkg);
   opt(host,'MOVE APP TO HOME',null,()=>{
     const added=this.mutate(model=>C.addHome(model,{id:C.uid('app'),type:'app',pkg:app.pkg,label:app.label,x:0,y:0,w:1,h:1},model.current));
     if(added){

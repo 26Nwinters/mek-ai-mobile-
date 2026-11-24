@@ -52,7 +52,7 @@ const Mek={
   iconCache:cachedHomeIcons.icons,homeIconTimestamps:cachedHomeIcons.times,
   homeIconSaveTimer:null,iconQueue:[],iconPending:new Map(),iconBusy:null,
   iconInflight:new Set(),iconCooldown:new Map(),iconDrainTimer:null,iconBatchTimer:null,
-  iconBatchCount:0,
+  iconBatchCount:0,iconFailures:new Map(),
   iconObserver:null,history:[],lastToastTimer:null,
   drag:null,gesture:null,gestureSuppressUntil:0,
   selectedWidget:null,drawerIconMenu:null,pendingWidgetRebindId:null,
@@ -64,6 +64,12 @@ const Mek={
   systemGlyphs:{
     phone:'☎',messages:'▤',browser:'◉',camera:'◎',settings:'⚙',
     mek:'◧',house:'⌂',music:'♫',weather:'☀',calendar:'▦',files:'▣',drawer:'▦'
+  },
+  systemIcon(name){
+    const paths={"phone":"M6 3h4l2 5-3 2c1 3 3 5 6 6l2-3 4 2v4c0 1-1 2-2 2C10 20 4 14 3 6c0-2 1-3 3-3Z","messages":"M4 4h16v12H9l-5 4V4ZM8 8h8M8 12h5","browser":"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM3 12h18M12 3c-5 5-5 13 0 18M12 3c5 5 5 13 0 18","camera":"M3 7h5l2-3h4l2 3h5v13H3V7ZM12 10a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z","settings":"M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M5 19l2-2M17 7l2-2M12 5a7 7 0 1 0 0 14 7 7 0 0 0 0-14ZM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z","mek":"M5 6h14v13H5V6Zm7-4v4M2 10h3m14 0h3M8 11h2m4 0h2M9 16h6","house":"M3 11 12 3l9 8M5 10v11h14V10M10 21v-7h4v7","music":"M9 18V5l11-2v13M9 18a3 2 0 1 1-6 0 3 2 0 0 1 6 0ZM20 16a3 2 0 1 1-6 0 3 2 0 0 1 6 0Z","weather":"M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M5 19l2-2M17 7l2-2M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10Z","calendar":"M3 5h18v16H3V5Zm5-3v6m8-6v6M3 10h18M7 14h3m4 0h3M7 17h3","files":"M3 5h7l2 3h9v12H3V5Z","drawer":"M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z","wifi":"M2 8q10-8 20 0M5 12q7-6 14 0M8 16q4-4 8 0M12 20h.01","bluetooth":"M12 2v20l6-5-12-10m0 10L18 7l-6-5","flashlight":"M8 3h8v4l-2 4v10h-4V11L8 7V3Zm0 4h8","airplane":"M12 3v18M3 14l9-6 9 6M8 20l4-3 4 3","display":"M3 4h18v13H3zM12 17v4m-5 0h10","battery":"M3 7h17v10H3zM20 10h2v4h-2M6 10h8v4H6z","lock":"M6 10h12v11H6zM9 10V6a3 3 0 0 1 6 0v4M12 14v3","dnd":"M16 3a9 9 0 1 0 5 14A9 9 0 0 1 16 3Z","notifications":"M5 17h14l-2-3V8a5 5 0 0 0-10 0v6l-2 3ZM10 20h4","privacy":"M12 3l8 3v6c0 5-5 8-8 10-3-2-8-5-8-10V6l8-3Zm-3 9 2 2 4-4","storage":"M4 4h16v16H4zM4 14h16M7 17h.01m4 0h.01","about":"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 8v6m0-10h.01","wallpaper":"M3 4h18v16H3zM3 17l6-6 4 4 3-3 5 5M16 8h.01","gesture":"M3 12h18M7 8l-4 4 4 4m10-8 4 4-4 4","sound":"M3 9h4l5-4v14l-5-4H3V9Zm13-1q5 4 0 8m3-11q8 7 0 14","device":"M6 2h12v20H6zM10 19h4","clock":"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 3v6l4 2","tasks":"M5 3h14v18H5zM8 8l1 1 3-3m-4 9 1 1 3-3m2-5h2m-2 7h2","notes":"M4 3h16v18H4zM8 7h8m-8 5h8m-8 5h5"};
+    const aliases={home:'house',assistant:'mek',apps:'drawer',volume:'sound',network:'wifi',security:'privacy'};
+    const path=paths[aliases[name]||name]||paths.about;
+    return '<svg class="mek-line-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="'+path+'"/></svg>';
   },
   now(){return new Date()},
   native(){return window.MEK||null},
@@ -573,7 +579,8 @@ const Mek={
     this.homeIconSaveTimer=null;
     try{localStorage.removeItem(PINNED_ICON_KEY);}catch(e){}
     this.iconPending.clear();this.iconQueue.length=0;
-    this.iconCooldown.clear();
+    this.iconCooldown.clear();this.iconFailures.clear();
+    for(const node of document.querySelectorAll('.app-symbol[data-pkg],.folder-mini[data-pkg]'))this.loadIcon(node,node.dataset.pkg);
     this.refreshApps(true);
   },
   refreshGreeting(){
@@ -632,6 +639,7 @@ const Mek={
     node.dataset.pkg=pkg;
     const cached=this.iconCache.get(pkg);
     if(cached){this.putIcon(node,cached);return;}
+    if((this.iconFailures.get(pkg)||0)>=3)return;
     const group=this.iconPending.get(pkg)||new Set();
     group.add(node);this.iconPending.set(pkg,group);
     if(!this.iconQueue.includes(pkg)&&!this.iconInflight.has(pkg))this.iconQueue.push(pkg);
@@ -649,15 +657,16 @@ const Mek={
     if(popup&&popup.classList.contains('hidden'))return false;
     return true;
   },
-  scheduleIconDrain(){
-    if(this.iconDrainTimer)return;
+  scheduleIconDrain(delay=24){
+    if(this.iconDrainTimer&&delay!==24)return;
+    if(this.iconDrainTimer&&delay===24)clearTimeout(this.iconDrainTimer);
     this.iconDrainTimer=setTimeout(()=>{
       this.iconDrainTimer=null;this.processIcons();
-    },24);
+    },delay);
   },
   processIcons(){
     if(this.iconInflight.size>0)return;
-    const batch=[],delayed=[];
+    const batch=[],delayed=[];let retryAt=Infinity;
     while(this.iconQueue.length&&batch.length<12){
       const pkg=this.iconQueue.shift();
       if(this.iconCache.has(pkg)||this.iconInflight.has(pkg))continue;
@@ -667,11 +676,12 @@ const Mek={
       if(!live.length){this.iconPending.delete(pkg);continue;}
       this.iconPending.set(pkg,new Set(live));
       if(!live.some(node=>this.iconIsActive(node))){delayed.push(pkg);continue;}
-      if(Date.now()<(this.iconCooldown.get(pkg)||0)){delayed.push(pkg);continue;}
+      const ready=this.iconCooldown.get(pkg)||0;
+      if(Date.now()<ready){retryAt=Math.min(retryAt,ready);delayed.push(pkg);continue;}
       batch.push(pkg);
     }
     this.iconQueue.push(...delayed);
-    if(!batch.length)return;
+    if(!batch.length){if(Number.isFinite(retryAt))this.scheduleIconDrain(Math.max(24,retryAt-Date.now()));return;}
     batch.forEach(pkg=>this.iconInflight.add(pkg));
     this.iconBatchCount++;
     const count=this.iconBatchCount;
@@ -701,7 +711,7 @@ const Mek={
   iconReady(pkg,data){
     if(!Core.packageOk(pkg))return;
     // A late callback must never overwrite a newer successful icon.
-    const good=typeof data==='string'&&/^data:image\/(?:webp|png);base64,/.test(data);
+    const good=typeof data==='string'&&data.length<200000&&/^data:image\/(?:webp|png);base64,[A-Za-z0-9+/=]+$/.test(data);
     if(good){
       if(this.iconCache.size>260){
         const oldest=this.iconCache.keys().next().value;
@@ -717,10 +727,9 @@ const Mek={
       for(const node of nodes)this.putIcon(node,data);
       this.iconPending.delete(pkg);
     }else{
-      // Don't cache empty icon responses forever. Keep letter placeholders
-      // and allow a retry later if Android was briefly busy.
-      this.iconPending.delete(pkg);
-      this.iconCooldown.set(pkg,Date.now()+30000);
+      // Keep mounted targets across transient failures; retry with a bounded backoff.
+      if(!this.iconCache.has(pkg))this.retryIcon(pkg);
+
     }
     this.iconInflight.delete(pkg);
     if(!this.iconInflight.size){
@@ -729,13 +738,49 @@ const Mek={
       this.scheduleIconDrain();
     }
   },
+  retryIcon(pkg,node){
+    const group=this.iconPending.get(pkg)||new Set();
+    if(node)group.add(node);
+    const live=new Set([...group].filter(n=>n.isConnected));
+    if(!live.size){this.iconPending.delete(pkg);return;}
+    // Multiple tiles may report the same failed decode; count it only once.
+    if(Date.now()<(this.iconCooldown.get(pkg)||0)){this.iconPending.set(pkg,live);return;}
+    const failures=(this.iconFailures.get(pkg)||0)+1;
+    this.iconFailures.set(pkg,failures);
+    if(failures>=3){this.iconPending.delete(pkg);return;}
+    this.iconPending.set(pkg,live);
+    this.iconCooldown.set(pkg,Date.now()+500*failures);
+    if(!this.iconQueue.includes(pkg))this.iconQueue.push(pkg);
+    this.scheduleIconDrain();
+  },
   putIcon(node,data){
     if(!node||!data)return;
-    if(node.querySelector('img'))return;
-    node.textContent='';
-    const img=document.createElement('img');img.src=data;img.alt='';
-    img.decoding='async';
-    node.append(img);
+    const previous=node.querySelector('img');
+    if(previous?.getAttribute('src')===data)return;
+    if(previous)previous.remove();
+    const fallback=node.querySelector('.icon-fallback')||document.createElement('span');
+    if(!fallback.parentNode){
+      fallback.className='icon-fallback';fallback.textContent=node.textContent||'?';
+      node.replaceChildren(fallback);
+    }
+    fallback.hidden=false;
+    const img=document.createElement('img');img.alt='';img.decoding='async';img.hidden=true;
+    img.addEventListener('load',()=>{
+      if(img.parentNode!==node)return;
+      fallback.hidden=true;img.hidden=false;
+      this.iconFailures.delete(node.dataset.pkg);
+    },{once:true});
+    img.addEventListener('error',()=>{
+      if(img.parentNode!==node)return;
+      img.remove();fallback.hidden=false;
+      const pkg=node.dataset.pkg;
+      if(this.iconCache.get(pkg)===data){
+        this.iconCache.delete(pkg);this.homeIconTimestamps.delete(pkg);this.schedulePinnedIconSave();
+        try{this.native()?.invalidateAppIcon?.(pkg);}catch(e){}
+      }
+      this.retryIcon(pkg,node);
+    },{once:true});
+    node.append(img);img.src=data;
   },
   validateBackup(json){
     if(typeof json!=='string'||json.length>1500000)throw Error('Invalid backup size');

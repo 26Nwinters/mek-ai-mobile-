@@ -998,6 +998,11 @@ public class MainActivity extends Activity {
             });
         }
 
+        @JavascriptInterface public void invalidateAppIcon(String pkg) {
+            if(pkg==null||!pkg.matches("[a-zA-Z0-9_.]{3,180}"))return;
+            synchronized(iconCache){iconCache.remove(pkg);}
+        }
+
         @JavascriptInterface public String getAppIcon(String pkg) {
             if (pkg == null || !pkg.matches("[a-zA-Z0-9_.]{3,180}")) return "";
             synchronized (iconCache) {
@@ -1007,7 +1012,7 @@ public class MainActivity extends Activity {
             try {
                 Drawable drawable = getPackageManager().getApplicationIcon(pkg);
                 String encoded = iconData(drawable);
-                synchronized (iconCache) { iconCache.put(pkg, encoded); }
+                if(!encoded.isEmpty()) synchronized (iconCache) { iconCache.put(pkg, encoded); }
                 return encoded;
             } catch (Exception e) {
                 return "";
@@ -1024,7 +1029,7 @@ public class MainActivity extends Activity {
                 Canvas canvas=new Canvas(bitmap);
                 drawable.setBounds(0,0,side,side);
                 drawable.draw(canvas);
-                bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY,82,output);
+                if(!bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY,82,output)||output.size()==0)return "";
                 return "data:image/webp;base64,"+
                     Base64.encodeToString(output.toByteArray(),Base64.NO_WRAP);
             } finally {

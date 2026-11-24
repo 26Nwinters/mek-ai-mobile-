@@ -44,7 +44,8 @@ function sourceTouchesDisabled(target){
 function atStart(x,y,target){
   clearTimer();clearEdge();
   if(!validScene()||sourceTouchesDisabled(target))return;
-  if(M.model.settings.layoutLocked && M.view==='home' && !M.activeFolder){
+  const lockedHome=M.model.settings.layoutLocked && M.view==='home' && !M.activeFolder;
+  if(lockedHome && sourceFrom(target)?.item?.type!=='app'){
     // Locked Home still permits swipe/tap navigation, not editing or drag.
     press={x,y,lastX:x,lastY:y,when:Date.now(),route:'home',source:null,resize:null,
       moved:false,longPressed:false,armed:false,scrollStart:0};
@@ -72,7 +73,7 @@ function atStart(x,y,target){
     holdTimer=setTimeout(()=>{
       holdTimer=null;
       if(!press||press.moved)return;
-      press.longPressed=true;press.armed=true;
+      press.longPressed=true;press.armed=!lockedHome;
       source.container?.classList.add('held-item');
       M.gestureSuppressUntil=Date.now()+500;
       if(navigator.vibrate)try{navigator.vibrate(9);}catch(e){}
@@ -150,6 +151,7 @@ function move(x,y,event){
   if(delta>MOVE_TOLERANCE&&!press.armed){
     press.moved=true;
     clearTimer();
+    if(!press.armed)press.longPressed=false;
   }
   if(!M.drag)return;
   M.drag.x=x;M.drag.y=y;
@@ -361,7 +363,8 @@ function finish(x,y){
     }else if(p.source?.loc==='folder'){
       M.openSheet('folder-app-actions',{app:p.source.item});
     }else if(p.source?.loc==='home'||p.source?.loc==='dock'){
-      M.enterEdit();
+      if(p.source.item.type==='app')M.openSheet('home-app-actions',{item:p.source.item});
+      else if(!M.model.settings.layoutLocked)M.enterEdit();
     }
     return;
   }
@@ -435,7 +438,10 @@ M.installGestures=function(){
     clearTimer();press=null;
     if(source.loc==='drawer')this.openSheet('app-actions',{item:source.item});
     else if(source.loc==='folder')this.openSheet('folder-app-actions',{app:source.item});
-    else if(source.loc==='home'||source.loc==='dock')this.enterEdit();
+    else if(source.loc==='home'||source.loc==='dock'){
+      if(source.item.type==='app')this.openSheet('home-app-actions',{item:source.item});
+      else if(!this.model.settings.layoutLocked)this.enterEdit();
+    }
   });
   document.addEventListener('keydown',event=>{
     if(event.target.matches('input,textarea'))return;

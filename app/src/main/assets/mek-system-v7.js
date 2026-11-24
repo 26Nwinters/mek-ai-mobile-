@@ -1,7 +1,7 @@
 /* MEK-AI Mobile 0.7.0 — interactive System Experience, NOT an Android SystemUI replacement. */
 (function(){
 'use strict';
-const VERSION='0.7.4', KEY='mek_system_v7';
+const VERSION='0.7.5', KEY='mek_system_v7';
 const $=id=>document.getElementById(id);
 const DEFAULTS={accent:'amber',compact:false,clock24:false,reduceMotion:false,privateNotifications:true,nav:'gestures',character:true,lockNotifications:true,brightness:65,brightnessOverride:false};
 let prefs={...DEFAULTS};
@@ -16,7 +16,7 @@ function date(){return new Date().toLocaleDateString(undefined,{weekday:'long',m
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(prefs));}catch(e){}}
 function battery(){try{const v=JSON.parse(invoke('battery')||'{}');return Number.isFinite(+v.percent)?Math.max(0,Math.min(100,Math.round(v.percent))):null;}catch(e){return null;}}
 function status(){const p=battery();return '<span>✦ MEK-AI / '+VERSION+'</span><span>'+time()+'　'+(p===null?'▣':p+'%')+'</span>';}
-function icon(name){return {'wifi':'⌁','bluetooth':'ᛒ','flashlight':'✦','airplane':'✈','display':'◐','volume':'♫','battery':'▣','settings':'⚙','home':'⌂','lock':'▤','dnd':'☾','apps':'▦','assistant':'◈','notifications':'▤','privacy':'◇','storage':'▣','about':'ⓘ','wallpaper':'◈','gesture':'↔','sound':'♫','network':'⌁','device':'▣','security':'◇'}[name]||'◈';}
+function icon(name){return window.Mek?.systemIcon?.(name)||'◈';}
 function panelTitle(kicker,title){return '<div class="sys-heading"><button type="button" data-sys-back aria-label="Back">‹</button><div><small>'+kicker+'</small><h2>'+title+'</h2></div><button type="button" data-sys-home aria-label="Return to Home">⌂</button></div>';}
 function navigate(view,push=true){if(push&&S.view!=='closed'&&S.view!==view)S.previous.push(S.view);S.view=view;S.query='';refreshNative();draw();}
 function open(view){if(window.Mek?.edit)window.Mek.exitEdit();if(window.Mek?.activeFolder)window.Mek.closeFolder();if(window.Mek?.sheet)window.Mek.closeSheet();S.previous=[];navigate(view,false);}

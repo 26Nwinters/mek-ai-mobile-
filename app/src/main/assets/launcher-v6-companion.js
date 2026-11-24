@@ -77,7 +77,7 @@ M.widgetDom=function(item){
     const hint=widget.querySelector('.robot-hint');
     if(line)line.textContent=moods[mood][0];
     if(hint)hint.textContent=moods[mood][1];
-    widget.querySelector('img')?.setAttribute('loading','lazy');
+    widget.querySelector('img')?.setAttribute('decoding','async');
   }
   if(item.kind==='clock'){
     widget.dataset.clockStyle=['dots','minimal'].includes(config.clockStyle)?config.clockStyle:'dots';

@@ -42,7 +42,7 @@ test('v0.7.4 prototype is bundled and loaded after the regular launcher',()=>{
  assert.match(html,/mek-system-v7\.js/);
  assert.ok(html.indexOf('launcher-v5-gestures.js')<html.indexOf('mek-system-v7.js'));
  const gradle=fs.readFileSync(path.join(root,'app/build.gradle.kts'),'utf8');
- assert.ok(gradle.includes('versionName = "0.7.4"'));
+ assert.ok(gradle.includes('versionName = "0.7.5"'));
 });
 test('shade opens from Home and closing restores native Android widgets',()=>{
  const {w,actions,root}=prototype();
